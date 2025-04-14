@@ -113,6 +113,62 @@ def generate_sample_ids_csv(kraken_dir):
         logging.error(f"Error generating sample IDs CSV: {e}")
         return None
 
+
+def extract_domains_from_kraken_report(kraken_report_path):
+    """
+    Extracts rows for each domain (Bacteria, Eukaryota, Archaea, Viruses) from a Kraken2 report.
+    Returns a dictionary with keys as domain names and values as DataFrames.
+    """
+    columns = [
+        "Percentage", "Reads_Covered", "Reads_Assigned", "Rank_Code",
+        "NCBI_TaxID", "Scientific_Name"
+    ]
+    df = pd.read_csv(kraken_report_path, sep="\t", header=None, names=columns)
+    domains = {}
+    current_domain = None
+    current_rows = []
+    for _, row in df.iterrows():
+        if row["Rank_Code"] == "D":
+            if current_domain:
+                domains[current_domain] = pd.DataFrame(current_rows)
+            current_domain = row["Scientific_Name"]
+            current_rows = [row]
+        else:
+            current_rows.append(row)
+    if current_domain:
+        domains[current_domain] = pd.DataFrame(current_rows)
+    return domains
+
+
+def clean_sample_name(file_name, domain_labels):
+    """
+    Removes domain labels and suffix from a file name to extract a clean sample name.
+    """
+    name = file_name.replace("_report.txt", "")
+    parts = name.split("_")
+    cleaned_parts = [p for p in parts if p not in domain_labels]
+    return "_".join(cleaned_parts)
+
+
+def process_kraken_reports(kraken_dir):
+    """
+    Processes Kraken2 report files in kraken_dir by splitting each into domain-specific files.
+    The output filenames are of the form: {sample}_{DomainWithoutSpaces}_kraken_report.txt.
+    """
+    domain_labels = {'Viruses', 'Eukaryota', 'Bacteria', 'Archaea'}
+
+    for file_name in os.listdir(kraken_dir):
+        if file_name.endswith("_report.txt"):
+            kraken_report_path = os.path.join(kraken_dir, file_name)
+            sample_name = clean_sample_name(file_name, domain_labels)
+            domains = extract_domains_from_kraken_report(kraken_report_path)
+
+            for domain, df in domains.items():
+                output_filename = f"{sample_name}_{domain.replace(' ', '')}_kraken_report.txt"
+                output_path = os.path.join(kraken_dir, output_filename)
+                df.to_csv(output_path, sep="\t", index=False, header=False)
+                logging.info(f"Saved {domain} data to {output_path}")
+
 def aggregate_kraken_results(kraken_dir, metadata_file=None, sample_id_df=None, read_count=1,max_read_count=1000000000000000000000000000):
     """
     Aggregates Kraken results, merging metadata or using sample IDs if metadata is not provided.
