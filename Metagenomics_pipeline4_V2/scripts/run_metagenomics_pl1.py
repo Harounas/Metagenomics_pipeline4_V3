@@ -6,7 +6,7 @@ import pandas as pd
 import sys
 import logging
 import subprocess
-from Metagenomics_pipeline4_V0.kraken_abundance_pipeline import (
+from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
     process_sample, 
     aggregate_kraken_results, 
     generate_abundance_plots,
@@ -15,8 +15,8 @@ from Metagenomics_pipeline4_V0.kraken_abundance_pipeline import (
     generate_unfiltered_merged_tsv,
     process_all_ranks
 )
-from Metagenomics_pipeline4_V0.ref_based_assembly import ref_based
-from Metagenomics_pipeline4_V0.deno_ref_assembly2 import deno_ref_based
+from Metagenomics_pipeline4_V2.ref_based_assembly import ref_based
+from Metagenomics_pipeline4_V2.deno_ref_assembly2 import deno_ref_based
 
 # Configure logging
 logging.basicConfig(
