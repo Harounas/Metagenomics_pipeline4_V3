@@ -102,7 +102,7 @@ def process_samples(args):
             output_dir=args.output_dir,
             threads=args.threads,
             run_bowtie=run_bowtie,
-            use_precomputed_reports=args.use_precomputed_reports,.args.use_assembly
+            use_precomputed_reports=args.use_precomputed_reports,args.use_assembly
         )
 
 def handle_metadata(args):
