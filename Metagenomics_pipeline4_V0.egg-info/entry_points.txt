@@ -1,0 +1,2 @@
+[console_scripts]
+run_metagenomics_pl = Metagenomics_pipeline4_V0.scripts.run_metagenomics_pl:main
