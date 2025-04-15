@@ -88,7 +88,7 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
 def process_output_report(output_report, output_dir):
     """
     Processes output report files by splitting them into domain-specific files.
-    Output files are named as: {sample}_{DomainWithoutSpaces}_output_report.txt.
+    Output files are named as: {sample}_{DomainWithoutSpaces}_kraken2_output.txt.
     """
     domain_labels = {'Viruses', 'Eukaryota', 'Bacteria', 'Archaea'}
     try:
@@ -105,7 +105,7 @@ def process_output_report(output_report, output_dir):
 
             if rank_code == "D":
                 if current_domain:
-                    save_domain_data(current_domain, current_rows, output_dir)
+                    save_domain_data(current_domain, current_rows, output_dir, is_kraken2_output=True)
                 current_domain = columns[5]  # Domain name (e.g., Viruses, Eukaryota)
                 current_rows = [line]
             else:
@@ -113,16 +113,17 @@ def process_output_report(output_report, output_dir):
 
         # Save the last domain data
         if current_domain:
-            save_domain_data(current_domain, current_rows, output_dir)
+            save_domain_data(current_domain, current_rows, output_dir, is_kraken2_output=True)
 
     except Exception as e:
         logging.error(f"Error processing output report {output_report}: {e}")
 
-def save_domain_data(domain, rows, output_dir):
+def save_domain_data(domain, rows, output_dir, is_kraken2_output=False):
     """
     Saves domain-specific data into a file.
+    If is_kraken2_output is True, saves it as a Kraken2 output file.
     """
-    domain_file_name = f"{domain.replace(' ', '')}_kraken2_output.txt"
+    domain_file_name = f"{domain.replace(' ', '')}_kraken2_output.txt" if is_kraken2_output else f"{domain.replace(' ', '')}_kraken_report.txt"
     domain_file_path = os.path.join(output_dir, domain_file_name)
 
     with open(domain_file_path, 'w') as f:
@@ -165,7 +166,7 @@ def process_kraken_reports(kraken_dir):
     """
     domain_labels = {'Viruses', 'Eukaryota', 'Bacteria', 'Archaea'}
     for file_name in os.listdir(kraken_dir):
-        if file_name.endswith("_report.txt"):
+        if file_name.endswith("_kraken_report.txt"):
             kraken_report_path = os.path.join(kraken_dir, file_name)
             sample_name = clean_sample_name(file_name, domain_labels)
             domains = extract_domains_from_kraken_report(kraken_report_path)
@@ -178,7 +179,7 @@ def process_kraken_reports(kraken_dir):
 def process_output_reports(kraken_dir):
     """
     Processes output.txt files by splitting them into domain-specific files.
-    Output files are named as: {sample}_{DomainWithoutSpaces}_output_report.txt.
+    Output files are named as: {sample}_{DomainWithoutSpaces}_kraken2_output.txt.
     """
     domain_labels = {'Viruses', 'Eukaryota', 'Bacteria', 'Archaea'}
     for file_name in os.listdir(kraken_dir):
@@ -471,22 +472,6 @@ def generate_abundance_plots(merged_tsv_path, top_N, col_filter, pat_to_keep):
     except Exception as e:
         logging.error(f"Error generating abundance plots: {e}")
 
-
-def run_multiqc(trimmomatic_output_dir):
-    """
-    Runs MultiQC on all files in the specified directory.
-
-    Parameters:
-      trimmomatic_output_dir (str): Directory containing files to summarize with MultiQC.
-    """
-    try:
-        subprocess.run(["multiqc", trimmomatic_output_dir], check=True)
-        logging.info("MultiQC report generated successfully.")
-    except Exception as e:
-        logging.error(f"Error running MultiQC: {e}")
-
-
-
 def process_all_ranks(kraken_dir, metadata_file=None, sample_id_df=None,
                       read_count=1, max_read_count=10**30, top_N=None, col_filter=None, pat_to_keep=None):
     """
@@ -531,3 +516,15 @@ def process_all_ranks(kraken_dir, metadata_file=None, sample_id_df=None,
                 # Example: merged_tsv.to_csv(output_path, sep="\t")
 
     return unfiltered_tsv
+def run_multiqc(trimmomatic_output_dir):
+    """
+    Runs MultiQC on all files in the specified directory.
+
+    Parameters:
+      trimmomatic_output_dir (str): Directory containing files to summarize with MultiQC.
+    """
+    try:
+        subprocess.run(["multiqc", trimmomatic_output_dir], check=True)
+        logging.info("MultiQC report generated successfully.")
+    except Exception as e:
+        logging.error(f"Error running MultiQC: {e}")
