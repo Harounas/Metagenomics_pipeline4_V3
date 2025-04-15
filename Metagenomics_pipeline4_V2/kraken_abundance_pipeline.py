@@ -120,7 +120,7 @@ def save_domain_data(domain, rows, output_dir):
     """
     Saves domain-specific data into a file.
     """
-    domain_file_name = f"{domain.replace(' ', '')}_output_report.txt"
+    domain_file_name = f"{domain.replace(' ', '')}_kraken2_output.txt"
     domain_file_path = os.path.join(output_dir, domain_file_name)
 
     with open(domain_file_path, 'w') as f:
