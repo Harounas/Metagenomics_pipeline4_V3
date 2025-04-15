@@ -153,14 +153,14 @@ def main():
             sample_id_df = create_sample_id_df(args.input_dir)
             sample_id_df.to_csv(os.path.join(args.output_dir, "sample_ids.csv"), index=False)
             process_all_ranks(args.output_dir, sample_id_df=sample_id_df,
-                              read_count=args.read_count, max_read_count=args.top_N,
+                              read_count=args.read_count, max_read_count=args.max_read_count,
                               top_N=args.top_N, col_filter=args.col_filter, pat_to_keep=args.pat_to_keep)
         else:
             if not args.metadata_file or not os.path.isfile(args.metadata_file):
                 logging.error(f"Metadata file '{args.metadata_file}' not found.")
                 sys.exit(1)
             process_all_ranks(args.output_dir, metadata_file=args.metadata_file,
-                              read_count=args.read_count, max_read_count=args.top_N,
+                              read_count=args.read_count, max_read_count=args.max_read_count,
                               top_N=args.top_N, col_filter=args.col_filter, pat_to_keep=args.pat_to_keep)
 
     if not args.skip_multiqc:
