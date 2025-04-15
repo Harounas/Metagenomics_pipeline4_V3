@@ -200,18 +200,29 @@ def process_kraken_reports(kraken_dir):
 def process_output_reports(kraken_dir):
     """
     Processes Kraken2 output files by splitting them into domain-specific files.
-    Also splits by rank code.
+    Also splits by rank code (S, K, G, F, D).
     """
     domain_labels = {'Viruses', 'Eukaryota', 'Bacteria', 'Archaea'}
     rank_labels = ['S', 'K', 'G', 'F', 'D']  # Rank codes
+    
     for file_name in os.listdir(kraken_dir):
         if file_name.endswith("_kraken2_output.txt"):
             output_report_path = os.path.join(kraken_dir, file_name)
             sample_name = clean_sample_name(file_name, domain_labels)
-            df = pd.read_csv(output_report_path, sep="\t", header=None)
-            df.columns = ["Percentage", "Reads_Covered", "Reads_Assigned", "Rank_Code", "NCBI_TaxID", "Scientific_Name"]
             
-            # Process by rank code
+            # Read Kraken2 output report into DataFrame
+            df = pd.read_csv(output_report_path, sep="\t", header=None)
+            
+            # Check the number of columns to assign correct column names
+            num_columns = df.shape[1]
+            if num_columns == 6:
+                df.columns = ["Classification", "Node", "TaxID", "Length", "Coverage", "Taxa"]
+            elif num_columns == 5:
+                df.columns = ["Classification", "Node", "TaxID", "Length", "Coverage"]
+            else:
+                raise ValueError(f"Unexpected number of columns ({num_columns}) in Kraken2 output report {file_name}")
+            
+            # Split by rank code (S, K, G, F, D)
             for rank in rank_labels:
                 rank_df = df[df["Rank_Code"] == rank]
                 if not rank_df.empty:
@@ -219,6 +230,17 @@ def process_output_reports(kraken_dir):
                     rank_output_path = os.path.join(kraken_dir, rank_output_filename)
                     rank_df.to_csv(rank_output_path, sep="\t", index=False)
                     logging.info(f"Saved {rank} data to {rank_output_path}")
+            
+            # Optionally, process domain-specific files (e.g., Viruses, Bacteria)
+            # Here we assume "Taxa" column contains the scientific names, which we will filter by domain.
+            for domain in domain_labels:
+                domain_df = df[df["Taxa"].str.contains(domain, case=False, na=False)]  # Filter based on domain
+                if not domain_df.empty:
+                    domain_output_filename = f"{sample_name}_kraken2_{domain}_output_report.txt"
+                    domain_output_path = os.path.join(kraken_dir, domain_output_filename)
+                    domain_df.to_csv(domain_output_path, sep="\t", index=False)
+                    logging.info(f"Saved {domain} data to {domain_output_path}")
+
 
 # Helper function to clean sample name
 def clean_sample_name(file_name, domain_labels):
