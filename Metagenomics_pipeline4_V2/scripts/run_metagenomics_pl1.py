@@ -1,4 +1,3 @@
-
 import os
 import glob
 import argparse
@@ -132,7 +131,6 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     validate_inputs(args)
 
-    process_samples(args)
     process_samples(args)
     merged_tsv_path = handle_metadata(args)
 
