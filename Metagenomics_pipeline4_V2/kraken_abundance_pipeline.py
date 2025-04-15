@@ -185,10 +185,11 @@ def process_kraken_reports(kraken_dir):
                 if not domain_df.empty:
                     # Construct new filename with sample name and domain
                     domain_output_filename = f"{sample_name}_{domain}_kraken_report.txt"
+                    domain_output_filename=process_filename(domain_output_filename)
                     domain_output_path = os.path.join(kraken_dir, domain_output_filename)
                     
                     # Save the filtered data to the new file
-                    domain_df=process_filename(domain_df)
+                    
                     domain_df.to_csv(domain_output_path, sep="\t", index=False, header=False)
                     logging.info(f"Saved {domain} data to {domain_output_path}")
 
