@@ -31,7 +31,7 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
                    skip_preprocessing=False, skip_existing=False):
     try:
         kraken_report = os.path.join(output_dir, f"{base_name}_kraken_report.txt")
-        output_report = os.path.join(output_dir, f"{base_name}_output_report.txt")
+        output_report = os.path.join(output_dir, f"{base_name}_kraken2_output.txt")
 
         if use_precomputed_reports:
             if not os.path.exists(kraken_report) or not os.path.exists(output_report):
@@ -180,7 +180,7 @@ def process_output_reports(kraken_dir):
     """
     domain_labels = {'Viruses', 'Eukaryota', 'Bacteria', 'Archaea'}
     for file_name in os.listdir(kraken_dir):
-        if file_name.endswith("_output_report.txt"):
+        if file_name.endswith("_kraken2_output.txt"):
             output_report_path = os.path.join(kraken_dir, file_name)
             sample_name = clean_sample_name(file_name, domain_labels)
             process_output_report(output_report_path, kraken_dir)
