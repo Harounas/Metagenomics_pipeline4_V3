@@ -144,9 +144,9 @@ def main():
 
     if not args.skip_reports:
         logging.info("Processing Kraken reports...")
-        process_kraken_reports(args.output_dir)
+        process_kraken_reports(args.output_dir)  # Process Kraken2 reports
         logging.info("Processing output reports...")
-        process_output_reports(args.output_dir)  # Add this line
+        process_output_reports(args.output_dir)  # Process Kraken2 output reports
 
     if args.process_all_ranks:
         if args.no_metadata:
