@@ -484,3 +484,50 @@ def run_multiqc(trimmomatic_output_dir):
         logging.info("MultiQC report generated successfully.")
     except Exception as e:
         logging.error(f"Error running MultiQC: {e}")
+
+
+
+def process_all_ranks(kraken_dir, metadata_file=None, sample_id_df=None,
+                      read_count=1, max_read_count=10**30, top_N=None, col_filter=None, pat_to_keep=None):
+    """
+    Processes Kraken results by generating abundance plots for multiple rank codes (S, K, G, F, D)
+    and creates an unfiltered merged TSV.
+
+    Parameters:
+      kraken_dir (str): Directory with Kraken report files.
+      metadata_file (str, optional): Metadata CSV file path.
+      sample_id_df (DataFrame, optional): DataFrame of sample IDs (if metadata not provided).
+      read_count (int): Minimum read count.
+      max_read_count (int): Maximum read count.
+      top_N (int): Top N categories to plot.
+      col_filter (list): List of taxa to filter out.
+      pat_to_keep (list): List of taxa to exclusively keep.
+
+    Returns:
+      str: Path to the unfiltered merged TSV.
+    """
+    unfiltered_tsv = generate_unfiltered_merged_tsv(kraken_dir, metadata_file, sample_id_df)
+    rank_codes = ['S', 'K', 'G', 'F', 'D']
+    domain_rank_mapping = {
+        "Bacteria": ["D", "F", "K", "G", "S"],
+        "Eukaryota": ["D", "F", "K", "G", "S"],
+        "Viruses": ["D", "F", "K", "G", "S"]
+    }
+
+    for domain, ranks in domain_rank_mapping.items():
+        for rank in ranks:
+            # Generate merged Kraken results for each rank and domain
+            merged_tsv = aggregate_kraken_results(kraken_dir, metadata_file, sample_id_df,
+                                                  read_count, max_read_count)
+            if merged_tsv:
+                # Generate abundance plots for each rank and domain
+                generate_abundance_plots(merged_tsv, top_N, col_filter, pat_to_keep)
+                
+                # Save the aggregated results to specific domain rank files
+                output_filename = f"merged_kraken_{rank}_{domain}.tsv"
+                output_path = os.path.join(kraken_dir, output_filename)
+                logging.info(f"Saving merged Kraken results for {domain} at rank {rank} to {output_path}")
+                # Save the merged results for each domain/rank (add your save logic here)
+                # Example: merged_tsv.to_csv(output_path, sep="\t")
+
+    return unfiltered_tsv
