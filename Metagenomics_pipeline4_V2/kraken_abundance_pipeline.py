@@ -470,3 +470,17 @@ def generate_abundance_plots(merged_tsv_path, top_N, col_filter, pat_to_keep):
 
     except Exception as e:
         logging.error(f"Error generating abundance plots: {e}")
+
+
+def run_multiqc(trimmomatic_output_dir):
+    """
+    Runs MultiQC on all files in the specified directory.
+
+    Parameters:
+      trimmomatic_output_dir (str): Directory containing files to summarize with MultiQC.
+    """
+    try:
+        subprocess.run(["multiqc", trimmomatic_output_dir], check=True)
+        logging.info("MultiQC report generated successfully.")
+    except Exception as e:
+        logging.error(f"Error running MultiQC: {e}")
