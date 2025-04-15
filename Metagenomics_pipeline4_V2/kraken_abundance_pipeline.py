@@ -152,6 +152,19 @@ def generate_sample_ids_csv(kraken_dir):
         logging.error(f"Error generating sample IDs CSV: {e}")
         return None
 
+def remove_first_kraken(filename):
+    # Split the filename by underscores
+    parts = filename.split('_')
+    
+    # Count how many times "kraken" appears
+    if parts.count("kraken") > 1:
+        # Remove only the first occurrence of "kraken"
+        index = parts.index("kraken")
+        del parts[index]
+        # Rejoin the parts into a new filename
+        new_filename = "_".join(parts)
+        return new_filename
+    return filename
 
 def process_kraken_reports(kraken_dir):
     """
@@ -169,6 +182,7 @@ def process_kraken_reports(kraken_dir):
             domains = extract_domains_from_kraken_report(kraken_report_path)
             for domain, df in domains.items():
                 output_filename = f"{sample_name}_{domain.replace(' ', '')}_kraken_report.txt"
+                output_filename  = remove_first_kraken(utput_filename)
                 output_path = os.path.join(kraken_dir, output_filename)
                 df.to_csv(output_path, sep="\t", index=False, header=False)
                 logging.info(f"Saved {domain} data to {output_path}")
