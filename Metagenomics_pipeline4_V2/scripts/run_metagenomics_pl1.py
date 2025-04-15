@@ -174,7 +174,7 @@ def main():
     if not args.skip_reports:
         domains = ["Bacteria", "Viruses", "Archaea", "Eukaryota"]
         domain_flags = [args.bacteria, args.virus, args.archaea, args.eukaryota]
-        domain_rank_codes = {"Bacteria": ['S', 'F', 'D', 'K'], "Viruses": ['S', 'F', 'D'], "Archaea": ['S', 'F', 'D', 'K'], "Eukaryota": ['S', 'F', 'D', 'K']}
+        domain_rank_codes = {"Bacteria": ['S','S1','S1','S2' ,'F','F1','F2','F3', 'D','D1','D2','D3'], "Viruses": ['S','S1','S1','S2' ,'F','F1','F2','F3', 'D','D1','D2','D3'], "Archaea": ['S','S1','S1','S2' ,'F','F1','F2','F3', 'D','D1','D2','D3'], "Eukaryota": ['S','S1','S1','S2' ,'F','F1','F2','F3', 'D','D1','D2','D3']}
 
         for domain, flag in zip(domains, domain_flags):
             if flag:
