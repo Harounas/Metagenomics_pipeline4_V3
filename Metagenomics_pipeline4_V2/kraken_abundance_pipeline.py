@@ -159,25 +159,43 @@ def generate_sample_ids_csv(kraken_dir):
 def process_kraken_reports(kraken_dir):
     """
     Processes Kraken2 report files by splitting them into domain-specific files.
-    Also splits by rank code.
+    Output files are named as: {sample}_{DomainWithoutSpaces}_kraken_report.txt.
+    
+    Parameters:
+      kraken_dir (str): Directory with Kraken report files.
     """
     domain_labels = {'Viruses', 'Eukaryota', 'Bacteria', 'Archaea'}
-    rank_labels = ['S', 'K', 'G', 'F', 'D']  # Rank codes
     for file_name in os.listdir(kraken_dir):
-        if file_name.endswith("_kraken2_output.txt"):
-            kraken_output_path = os.path.join(kraken_dir, file_name)
+        if file_name.endswith("_report.txt"):
+            kraken_report_path = os.path.join(kraken_dir, file_name)
             sample_name = clean_sample_name(file_name, domain_labels)
-            df = pd.read_csv(kraken_output_path, sep="\t", header=None)
-            df.columns = ["Percentage", "Reads_Covered", "Reads_Assigned", "Rank_Code", "NCBI_TaxID", "Scientific_Name"]
-            
-            # Process by rank code
-            for rank in rank_labels:
-                rank_df = df[df["Rank_Code"] == rank]
-                if not rank_df.empty:
-                    rank_output_filename = f"{sample_name}_kraken_{rank}_kraken_report.txt"
-                    rank_output_path = os.path.join(kraken_dir, rank_output_filename)
-                    rank_df.to_csv(rank_output_path, sep="\t", index=False)
-                    logging.info(f"Saved {rank} data to {rank_output_path}")
+            try:
+                # Read the Kraken report into a DataFrame
+                df = pd.read_csv(kraken_report_path, sep="\t", header=None)
+                
+                # Check the number of columns in the DataFrame
+                num_columns = df.shape[1]
+                
+                # Adjust the columns based on the number of columns
+                if num_columns == 6:
+                    df.columns = ["Percentage", "Reads_Covered", "Reads_Assigned", "Rank_Code", "NCBI_TaxID", "Scientific_Name"]
+                elif num_columns == 5:
+                    # Handle case with 5 columns (e.g., no "Scientific_Name")
+                    df.columns = ["Percentage", "Reads_Covered", "Reads_Assigned", "Rank_Code", "NCBI_TaxID"]
+                else:
+                    raise ValueError(f"Unexpected number of columns ({num_columns}) in Kraken report {file_name}")
+                
+                # Process the domains
+                domains = extract_domains_from_kraken_report(kraken_report_path)
+                for domain, domain_df in domains.items():
+                    output_filename = f"{sample_name}_{domain.replace(' ', '')}_kraken_report.txt"
+                    output_path = os.path.join(kraken_dir, output_filename)
+                    domain_df.to_csv(output_path, sep="\t", index=False, header=True)
+                    logging.info(f"Saved {domain} data to {output_path}")
+
+            except Exception as e:
+                logging.error(f"Error processing Kraken report {kraken_report_path}: {e}")
+
 
 def process_output_reports(kraken_dir):
     """
