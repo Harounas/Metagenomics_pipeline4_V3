@@ -200,13 +200,45 @@ def process_kraken_reports(kraken_dir):
 def process_output_reports(kraken_dir):
     """
     Processes Kraken2 output files by splitting them into domain-specific files.
-    Also splits by rank code (S, K, G, F, D).
+    Also splits by rank code (S, K, G, F, D) and matches taxon IDs from Kraken reports.
+    Only one input argument (kraken_dir) is used.
     """
-    domain_labels = {'Viruses', 'Eukaryota', 'Bacteria', 'Archaea'}
+    # Define domain labels and rank codes
+    domain_labels = ['Viruses', 'Eukaryota', 'Bacteria', 'Archaea']
     rank_labels = ['S', 'K', 'G', 'F', 'D']  # Rank codes
     
+    # Create a dictionary to store taxon IDs for each domain
+    domain_taxids = {domain: set() for domain in domain_labels}
+    
+    # Process Kraken2 output files to match taxon IDs
     for file_name in os.listdir(kraken_dir):
-        if file_name.endswith("_kraken2_output.txt"):
+        if file_name.endswith("_kraken_report.txt"):  # Domain Kraken reports (e.g., Viruses, Bacteria, etc.)
+            domain_name = None
+            if "Viruses" in file_name:
+                domain_name = "Viruses"
+            elif "Bacteria" in file_name:
+                domain_name = "Bacteria"
+            elif "Eukaryota" in file_name:
+                domain_name = "Eukaryota"
+            elif "Archaea" in file_name:
+                domain_name = "Archaea"
+            
+            if domain_name:
+                # Read the domain Kraken report to extract taxon IDs
+                domain_report_path = os.path.join(kraken_dir, file_name)
+                try:
+                    with open(domain_report_path, 'r') as file:
+                        for line in file:
+                            fields = line.strip().split("\t")
+                            if len(fields) >= 5:
+                                taxid = fields[4]  # Extract taxid from the domain report
+                                domain_taxids[domain_name].add(taxid)
+                except Exception as e:
+                    logging.error(f"Error reading {domain_name} Kraken report: {e}")
+
+    # Now process Kraken2 output files
+    for file_name in os.listdir(kraken_dir):
+        if file_name.endswith("_kraken2_output.txt"):  # Kraken2 output file
             output_report_path = os.path.join(kraken_dir, file_name)
             sample_name = clean_sample_name(file_name, domain_labels)
             
@@ -231,15 +263,17 @@ def process_output_reports(kraken_dir):
                     rank_df.to_csv(rank_output_path, sep="\t", index=False)
                     logging.info(f"Saved {rank} data to {rank_output_path}")
             
-            # Optionally, process domain-specific files (e.g., Viruses, Bacteria)
-            # Here we assume "Taxa" column contains the scientific names, which we will filter by domain.
+            # Match taxon IDs in Kraken2 output to domain-specific taxon IDs
             for domain in domain_labels:
-                domain_df = df[df["Taxa"].str.contains(domain, case=False, na=False)]  # Filter based on domain
-                if not domain_df.empty:
+                # Filter Kraken2 output by taxon IDs that match the current domain
+                matching_taxa_df = df[df["TaxID"].isin(domain_taxids[domain])]
+                
+                if not matching_taxa_df.empty:
                     domain_output_filename = f"{sample_name}_kraken2_{domain}_output_report.txt"
                     domain_output_path = os.path.join(kraken_dir, domain_output_filename)
-                    domain_df.to_csv(domain_output_path, sep="\t", index=False)
-                    logging.info(f"Saved {domain} data to {domain_output_path}")
+                    matching_taxa_df.to_csv(domain_output_path, sep="\t", index=False)
+                    logging.info(f"Saved {domain} matched data to {domain_output_path}")
+
 
 
 # Helper function to clean sample name
