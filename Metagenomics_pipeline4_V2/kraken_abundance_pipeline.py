@@ -166,7 +166,7 @@ def process_kraken_reports(kraken_dir):
     """
     domain_labels = {'Viruses', 'Eukaryota', 'Bacteria', 'Archaea'}
     for file_name in os.listdir(kraken_dir):
-        if file_name.endswith("_report.txt"):
+        if file_name.endswith("kraken_report.txt"):
             kraken_report_path = os.path.join(kraken_dir, file_name)
             sample_name = clean_sample_name(file_name, domain_labels)
             try:
