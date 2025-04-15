@@ -118,6 +118,11 @@ def process_output_report(output_report, output_dir):
     except Exception as e:
         logging.error(f"Error processing output report {output_report}: {e}")
 
+
+def process_filename(fname, token="kraken", new_ext=".txt"):
+    base, _ = os.path.splitext(fname)
+    return "_".join(t for t in base.split("_") if t.lower() != token.lower()) + new_ext
+
 def save_domain_data(domain, rows, output_dir, is_kraken2_output=False):
     """
     Saves domain-specific data into a file.
@@ -183,6 +188,7 @@ def process_kraken_reports(kraken_dir):
                     domain_output_path = os.path.join(kraken_dir, domain_output_filename)
                     
                     # Save the filtered data to the new file
+                    domain_df=process_filename(domain_df))
                     domain_df.to_csv(domain_output_path, sep="\t", index=False, header=False)
                     logging.info(f"Saved {domain} data to {domain_output_path}")
 
