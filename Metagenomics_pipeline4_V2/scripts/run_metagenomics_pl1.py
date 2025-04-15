@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+"""
+run_metagenomics_pl1.py
+
+This script runs a metagenomics analysis pipeline including Kraken2 classification, SPAdes assembly, host depletion via Bowtie2, and generates abundance plots, domain-specific Kraken2 reports, and MultiQC reports.
+"""
+
 import os
 import glob
 import argparse
@@ -12,7 +19,8 @@ from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
     run_multiqc,
     process_kraken_reports,
     generate_unfiltered_merged_tsv,
-    process_all_ranks
+    process_all_ranks,
+    process_output_reports  # Ensure that process_output_reports is imported
 )
 from Metagenomics_pipeline4_V2.ref_based_assembly import ref_based
 from Metagenomics_pipeline4_V2.deno_ref_assembly2 import deno_ref_based
@@ -135,7 +143,10 @@ def main():
     merged_tsv_path = handle_metadata(args)
 
     if not args.skip_reports:
+        logging.info("Processing Kraken reports...")
         process_kraken_reports(args.output_dir)
+        logging.info("Processing output reports...")
+        process_output_reports(args.output_dir)  # Add this line
 
     if args.process_all_ranks:
         if args.no_metadata:
@@ -161,7 +172,6 @@ def main():
         sample_id_df = None
 
     if not args.skip_reports:
-        process_kraken_reports(args.output_dir)
         domains = ["Bacteria", "Viruses", "Archaea", "Eukaryota"]
         domain_flags = [args.bacteria, args.virus, args.archaea, args.eukaryota]
         domain_rank_codes = {"Bacteria": ['S', 'F', 'D', 'K'], "Viruses": ['S', 'F', 'D'], "Archaea": ['S', 'F', 'D', 'K'], "Eukaryota": ['S', 'F', 'D', 'K']}
