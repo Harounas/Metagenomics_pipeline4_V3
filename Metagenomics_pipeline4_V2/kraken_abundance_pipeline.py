@@ -182,7 +182,7 @@ def process_kraken_reports(kraken_dir):
             domains = extract_domains_from_kraken_report(kraken_report_path)
             for domain, df in domains.items():
                 output_filename = f"{sample_name}_{domain.replace(' ', '')}_kraken_report.txt"
-                output_filename  = remove_first_kraken(utput_filename)
+                output_filename  = remove_first_kraken(output_filename)
                 output_path = os.path.join(kraken_dir, output_filename)
                 df.to_csv(output_path, sep="\t", index=False, header=False)
                 logging.info(f"Saved {domain} data to {output_path}")
