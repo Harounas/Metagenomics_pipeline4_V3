@@ -2,7 +2,9 @@
 """
 kraken_abundance_pipeline.py (Version 2)
 
-This module processes Kraken2 reports, generates abundance plots, aggregates results (with metadata or sample IDs), and supports quality control via MultiQC. It supports de novo assembly via MetaSPAdes, optional host depletion via Bowtie2, and allows skipping preprocessing steps.
+This module processes Kraken2 reports, generates abundance plots, aggregates results (with metadata or sample IDs),
+and supports quality control via MultiQC. It supports de novo assembly via MetaSPAdes, optional host depletion via Bowtie2,
+and allows skipping preprocessing steps.
 """
 
 import os
@@ -101,7 +103,7 @@ def process_output_report(output_report, output_dir):
                 continue
             rank_code = columns[3]
 
-            if rank_code == "D":  # Domain level
+            if rank_code == "D":
                 if current_domain:
                     save_domain_data(current_domain, current_rows, output_dir)
                 current_domain = columns[5]  # Domain name (e.g., Viruses, Eukaryota)
@@ -115,7 +117,6 @@ def process_output_report(output_report, output_dir):
 
     except Exception as e:
         logging.error(f"Error processing output report {output_report}: {e}")
-
 
 def save_domain_data(domain, rows, output_dir):
     """
@@ -219,17 +220,20 @@ def extract_domains_from_kraken_report(kraken_report_path):
     return domains
 
 def aggregate_kraken_results(kraken_dir, metadata_file=None, sample_id_df=None,
-                             read_count=1, max_read_count=10**30, rank_code='S', domain_filter=None):
+                             read_count=1, max_read_count=10**30):
     """
-    Aggregates Kraken results at a specified rank code, applying per-domain read count filtering.
-    
-    For example, at species level (default 'S'), rows with Rank_code in ['S', 'S1', 'S2', 'S3']
-    are selected; at Family level ('F'), rows with Rank_code in ['F', 'F1', 'F2', 'F3'] are selected,
-    and so on.
-    
-    Args:
-        - min_read_counts (dict): Dictionary of minimum read count per domain.
-        - max_read_counts (dict): Dictionary of maximum read count per domain.
+    Aggregates Kraken results (species-level) and merges metadata (or sample IDs if metadata_file is None)
+    into a single TSV file.
+
+    Parameters:
+      kraken_dir (str): Directory containing Kraken report files.
+      metadata_file (str, optional): Path to metadata CSV.
+      sample_id_df (DataFrame, optional): DataFrame of sample IDs.
+      read_count (int): Minimum read count threshold.
+      max_read_count (int): Maximum read count threshold.
+
+    Returns:
+      str: Path to the generated merged TSV file.
     """
     try:
         # Load metadata
@@ -244,14 +248,6 @@ def aggregate_kraken_results(kraken_dir, metadata_file=None, sample_id_df=None,
 
         sample_id_col = metadata.columns[0]
         aggregated_results = {}
-
-        # Define rank mapping: keys are desired rank level; values are acceptable rank codes.
-        rank_mapping = {
-            'S': ['S', 'S1', 'S2', 'S3'],
-            'K': ['K', 'K1', 'K2', 'K3'],
-            'F': ['F', 'F1', 'F2', 'F3'],
-            'D': ['D', 'D1', 'D2', 'D3']
-        }
 
         for file_name in os.listdir(kraken_dir):
             if file_name.endswith("_report.txt"):
@@ -270,8 +266,7 @@ def aggregate_kraken_results(kraken_dir, metadata_file=None, sample_id_df=None,
                         extracted_part = '_'.join(parts[:-2])
                         sampleandtaxonid = f"{extracted_part}{ncbi_ID}"
 
-                        if rank_code_field in rank_mapping.get(rank_code, [rank_code]) and \
-                           (read_count <= nr_frag_direct_at_taxon <= max_read_count):
+                        if rank_code_field in ['S', 'S1', 'S2', 'S3'] and (read_count <= nr_frag_direct_at_taxon <= max_read_count):
                             if extracted_part in metadata[sample_id_col].unique():
                                 sample_metadata = metadata.loc[metadata[sample_id_col] == extracted_part].iloc[0].to_dict()
                                 aggregated_results[sampleandtaxonid] = {
@@ -285,7 +280,7 @@ def aggregate_kraken_results(kraken_dir, metadata_file=None, sample_id_df=None,
                                     **sample_metadata
                                 }
 
-        merged_tsv_path = os.path.join(kraken_dir, f"merged_kraken_{rank_code}.tsv")
+        merged_tsv_path = os.path.join(kraken_dir, "merged_kraken.tsv")
         with open(merged_tsv_path, 'w') as f:
             headers = ['Perc_frag_cover', 'Nr_frag_cover', 'Nr_frag_direct_at_taxon',
                        'Rank_code', 'NCBI_ID', 'Scientific_name', 'SampleID'] + metadata.columns[1:].tolist()
@@ -299,3 +294,179 @@ def aggregate_kraken_results(kraken_dir, metadata_file=None, sample_id_df=None,
     except Exception as e:
         logging.error(f"Error aggregating Kraken results: {e}")
         return None
+
+
+def generate_unfiltered_merged_tsv(kraken_dir, metadata_file=None, sample_id_df=None):
+    """
+    Generates an unfiltered merged TSV file containing all Kraken report data from the specified directory.
+
+    Parameters:
+      kraken_dir (str): Directory with Kraken report files.
+      metadata_file (str, optional): Path to metadata CSV.
+      sample_id_df (DataFrame, optional): DataFrame of sample IDs if metadata_file is not provided.
+
+    Returns:
+      str: Path to the unfiltered merged TSV file.
+    """
+    try:
+        if metadata_file:
+            metadata = pd.read_csv(metadata_file, sep=",")
+            logging.info("Using metadata from the provided file.")
+        elif sample_id_df is not None:
+            metadata = sample_id_df
+            logging.info("Using sample IDs as metadata.")
+        else:
+            raise ValueError("Either metadata_file or sample_id_df must be provided.")
+
+        sample_id_col = metadata.columns[0]
+        unfiltered_results = {}
+
+        for file_name in os.listdir(kraken_dir):
+            if file_name.endswith("_report.txt"):
+                with open(os.path.join(kraken_dir, file_name), 'r') as f:
+                    for line in f:
+                        fields = line.strip().split('\t')
+                        if len(fields) < 6:
+                            continue
+                        perc_frag_cover = fields[0]
+                        nr_frag_cover = fields[1]
+                        nr_frag_direct_at_taxon = int(fields[2])
+                        rank_code_field = fields[3]
+                        ncbi_ID = fields[4]
+                        scientific_name = fields[5]
+                        parts = file_name.split('_')
+                        extracted_part = '_'.join(parts[:-2])
+                        sampleandtaxonid = f"{extracted_part}{ncbi_ID}"
+
+                        if extracted_part in metadata[sample_id_col].unique():
+                            sample_metadata = metadata.loc[metadata[sample_id_col] == extracted_part].iloc[0].to_dict()
+                            unfiltered_results[sampleandtaxonid] = {
+                                'Perc_frag_cover': perc_frag_cover,
+                                'Nr_frag_cover': nr_frag_cover,
+                                'Nr_frag_direct_at_taxon': nr_frag_direct_at_taxon,
+                                'Rank_code': rank_code_field,
+                                'NCBI_ID': ncbi_ID,
+                                'Scientific_name': scientific_name,
+                                'SampleID': extracted_part,
+                                **sample_metadata
+                            }
+
+        merged_tsv_path = os.path.join(kraken_dir, "merged_kraken_all_ranks_unfiltered.tsv")
+        with open(merged_tsv_path, 'w') as f:
+            headers = ['Perc_frag_cover', 'Nr_frag_cover', 'Nr_frag_direct_at_taxon',
+                       'Rank_code', 'NCBI_ID', 'Scientific_name', 'SampleID'] + metadata.columns[1:].tolist()
+            f.write("\t".join(headers) + "\n")
+            for data in unfiltered_results.values():
+                f.write("\t".join(str(data[col]) for col in headers) + "\n")
+
+        logging.info(f"Unfiltered merged Kraken results saved to {merged_tsv_path}")
+        return merged_tsv_path
+
+    except Exception as e:
+        logging.error(f"Error generating unfiltered merged TSV: {e}")
+        return None
+
+
+def generate_abundance_plots(merged_tsv_path, top_N, col_filter, pat_to_keep):
+    """
+    Generates abundance plots for viral and bacterial data from an aggregated Kraken TSV.
+    Applies optional filtering (removing human reads, and user-specified taxa).
+    
+    Parameters:
+      merged_tsv_path (str): Path to the merged Kraken TSV.
+      top_N (int): Limit to top N categories.
+      col_filter (list): List of taxa names to remove.
+      pat_to_keep (list): List of taxa names to exclusively retain.
+    """
+    try:
+        df = pd.read_csv(merged_tsv_path, sep="\t")
+        # Clean column names and strip string values
+        df.columns = df.columns.str.replace('/', '_').str.replace(' ', '_')
+        df = df.apply(lambda col: col.map(lambda x: x.strip() if isinstance(x, str) else x))
+        # Remove human reads
+        df = df[df['Scientific_name'] != 'Homo sapiens']
+        if col_filter:
+            df = df[~df['Scientific_name'].isin(col_filter)]
+        if pat_to_keep:
+            df = df[df['Scientific_name'].isin(pat_to_keep)]
+
+        # Generate plots for both viral and bacterial abundance
+        for focus, filter_str, plot_title in [
+            ('Virus_Type', 'Virus', 'Viral'),
+            ('Bacteria_Type', 'Virus', 'Bacterial')
+        ]:
+            if focus == 'Bacteria_Type':
+                df_focus = df[~df['Scientific_name'].str.contains(filter_str, case=False, na=False)]
+            else:
+                df_focus = df[df['Scientific_name'].str.contains(filter_str, case=False, na=False)]
+            df_focus = df_focus.rename(columns={'Scientific_name': focus})
+
+            if top_N:
+                top_N_categories = df_focus[focus].value_counts().head(top_N).index
+                df_focus = df_focus[df_focus[focus].isin(top_N_categories)]
+
+            categorical_cols = df_focus.select_dtypes(include=['object']).columns.tolist()
+            if focus in categorical_cols:
+                categorical_cols.remove(focus)
+
+            for col in categorical_cols:
+                grouped_sum = df_focus.groupby([focus, col])['Nr_frag_direct_at_taxon'].mean().reset_index()
+                # Define color mapping: use preset colors if possible, else generate random ones.
+                colordict = defaultdict(int)
+                preset_colors = ['#000000','#FF0000','#556B2F','#ADD8E6','#6495ED','#00FF00',
+                                 '#0000FF','#FFFF00','#00FFFF','#FF00FF','#C0C0C0','#808080',
+                                 '#800000','#808000','#008000','#008080','#000080','#CD5C5C',
+                                 '#DAA520','#FFA500','#F0E68C','#ADFF2F','#2F4F4F','#E0FFFF',
+                                 '#4169E1','#8A2BE2','#4B0082','#EE82EE','#D2691E','#BC8F8F',
+                                 '#800080','#DDA0DD','#FF1493','#8B4513','#A0522D','#708090',
+                                 '#B0C4DE','#FFFFF0','#DCDCDC','#FFEFD5','#F5DEB3','#7FFFD4',
+                                 '#FFC0CB','#A52A2A','#040720','#34282C','#3B3131','#3A3B3C',
+                                 '#52595D','#FFFFFF','#FFFFF4','#FFF9E3']
+                unique_targets = grouped_sum[focus].unique()
+                if len(unique_targets) <= len(preset_colors):
+                    for target, color in zip(unique_targets, preset_colors[:len(unique_targets)]):
+                        colordict[target] = color
+                else:
+                    random_colors = [f"#{random.randint(0, 0xFFFFFF):06X}" for _ in range(len(unique_targets))]
+                    for target, color in zip(unique_targets, random_colors):
+                        colordict[target] = color
+
+                # Dynamic plot dimensions and font size
+                plot_width = 1100 + 5 * len(grouped_sum[col].unique())
+                plot_height = 800 + 5 * len(grouped_sum[col].unique())
+                font_size = max(10, 14 - len(grouped_sum[col].unique()) // 10)
+
+                fig = px.bar(
+                    grouped_sum,
+                    x=col,
+                    y='Nr_frag_direct_at_taxon',
+                    color=focus,
+                    color_discrete_map=colordict,
+                    title=f"{plot_title} Abundance by {col}"
+                )
+                summary_csv_path = os.path.join(f"{plot_title}_summary.csv")
+                grouped_sum.to_csv(summary_csv_path, index=False)
+                fig.update_layout(
+                    xaxis=dict(tickfont=dict(size=font_size), tickangle=45),
+                    yaxis=dict(tickfont=dict(size=font_size)),
+                    title=dict(text=f'Average {plot_title} Abundance by {col}', x=0.5, font=dict(size=16)),
+                    bargap=0.5,
+                    legend=dict(
+                        font=dict(size=font_size),
+                        x=1, y=1,
+                        traceorder='normal',
+                        orientation='v',
+                        itemwidth=30,
+                        itemsizing='constant',
+                        itemclick='toggleothers',
+                        itemdoubleclick='toggle'
+                    ),
+                    width=plot_width,
+                    height=plot_height
+                )
+                out_img = f"{plot_title}_Abundance_by_{col}.png"
+                fig.write_image(out_img, format='png', scale=3, width=1920, height=1080)
+                logging.info(f"Abundance plot saved to {out_img}")
+
+    except Exception as e:
+        logging.error(f"Error generating abundance plots: {e}")
