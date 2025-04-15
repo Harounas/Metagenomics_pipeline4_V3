@@ -159,34 +159,48 @@ def generate_sample_ids_csv(kraken_dir):
 def process_kraken_reports(kraken_dir):
     """
     Processes Kraken2 report files by splitting them into domain-specific files.
-    Output files are named as: {sample}_{DomainWithoutSpaces}_kraken_report.txt.
-    
-    Parameters:
-      kraken_dir (str): Directory with Kraken report files.
+    Also splits by rank code.
     """
     domain_labels = {'Viruses', 'Eukaryota', 'Bacteria', 'Archaea'}
+    rank_labels = ['S', 'K', 'G', 'F', 'D']  # Rank codes
     for file_name in os.listdir(kraken_dir):
-        if file_name.endswith("_kraken_report.txt"):
-            kraken_report_path = os.path.join(kraken_dir, file_name)
+        if file_name.endswith("_kraken2_output.txt"):
+            kraken_output_path = os.path.join(kraken_dir, file_name)
             sample_name = clean_sample_name(file_name, domain_labels)
-            domains = extract_domains_from_kraken_report(kraken_report_path)
-            for domain, df in domains.items():
-                output_filename = f"{sample_name}_{domain.replace(' ', '')}_kraken_report.txt"
-                output_path = os.path.join(kraken_dir, output_filename)
-                df.to_csv(output_path, sep="\t", index=False, header=False)
-                logging.info(f"Saved {domain} data to {output_path}")
+            df = pd.read_csv(kraken_output_path, sep="\t", header=None)
+            df.columns = ["Percentage", "Reads_Covered", "Reads_Assigned", "Rank_Code", "NCBI_TaxID", "Scientific_Name"]
+            
+            # Process by rank code
+            for rank in rank_labels:
+                rank_df = df[df["Rank_Code"] == rank]
+                if not rank_df.empty:
+                    rank_output_filename = f"{sample_name}_kraken_{rank}_kraken_report.txt"
+                    rank_output_path = os.path.join(kraken_dir, rank_output_filename)
+                    rank_df.to_csv(rank_output_path, sep="\t", index=False)
+                    logging.info(f"Saved {rank} data to {rank_output_path}")
 
 def process_output_reports(kraken_dir):
     """
-    Processes output.txt files by splitting them into domain-specific files.
-    Output files are named as: {sample}_{DomainWithoutSpaces}_kraken2_output.txt.
+    Processes Kraken2 output files by splitting them into domain-specific files.
+    Also splits by rank code.
     """
     domain_labels = {'Viruses', 'Eukaryota', 'Bacteria', 'Archaea'}
+    rank_labels = ['S', 'K', 'G', 'F', 'D']  # Rank codes
     for file_name in os.listdir(kraken_dir):
         if file_name.endswith("_kraken2_output.txt"):
             output_report_path = os.path.join(kraken_dir, file_name)
             sample_name = clean_sample_name(file_name, domain_labels)
-            process_output_report(output_report_path, kraken_dir)
+            df = pd.read_csv(output_report_path, sep="\t", header=None)
+            df.columns = ["Percentage", "Reads_Covered", "Reads_Assigned", "Rank_Code", "NCBI_TaxID", "Scientific_Name"]
+            
+            # Process by rank code
+            for rank in rank_labels:
+                rank_df = df[df["Rank_Code"] == rank]
+                if not rank_df.empty:
+                    rank_output_filename = f"{sample_name}_kraken2_{rank}_output_report.txt"
+                    rank_output_path = os.path.join(kraken_dir, rank_output_filename)
+                    rank_df.to_csv(rank_output_path, sep="\t", index=False)
+                    logging.info(f"Saved {rank} data to {rank_output_path}")
 
 # Helper function to clean sample name
 def clean_sample_name(file_name, domain_labels):
