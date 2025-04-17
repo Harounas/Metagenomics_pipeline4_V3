@@ -2,7 +2,8 @@
 """
 run_metagenomics_pl1.py
 
-This script runs a metagenomics analysis pipeline including Kraken2 classification, SPAdes assembly, host depletion via Bowtie2, and generates abundance plots, domain-specific Kraken2 reports, and MultiQC reports.
+Metagenomics pipeline including Kraken2 classification, optional assembly‐based contig
+extraction & Diamond annotation, and downstream analyses.
 """
 
 import os
@@ -12,22 +13,25 @@ import pandas as pd
 import sys
 import logging
 import subprocess
+
 from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
-    process_sample, 
-    aggregate_kraken_results, 
+    process_sample,
+    aggregate_kraken_results,
     generate_abundance_plots,
     run_multiqc,
     process_kraken_reports,
     generate_unfiltered_merged_tsv,
     process_all_ranks,
-    process_output_reports  # Ensure that process_output_reports is imported
+    process_output_reports
 )
 from Metagenomics_pipeline4_V2.ref_based_assembly import ref_based
 from Metagenomics_pipeline4_V2.deno_ref_assembly2 import deno_ref_based
 
+import extract_contigs_diamond  # our contig‐extraction & Diamond module
+
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, 
+    level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.FileHandler("metagenomics_pipeline.log"),
@@ -38,10 +42,11 @@ logging.basicConfig(
 def create_sample_id_df(input_dir):
     sample_ids = []
     for f in glob.glob(os.path.join(input_dir, "*_R1*.fastq*")):
-        sample_id = os.path.basename(f)
-        for pattern in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz", "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
-            sample_id = sample_id.replace(pattern, "")
-        sample_ids.append(sample_id)
+        sid = os.path.basename(f)
+        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz",
+                    "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
+            sid = sid.replace(pat, "")
+        sample_ids.append(sid)
     return pd.DataFrame(sample_ids, columns=["Sample_IDs"])
 
 def validate_inputs(args):
@@ -49,7 +54,7 @@ def validate_inputs(args):
         logging.error(f"Input directory '{args.input_dir}' not found.")
         sys.exit(1)
     if not os.path.isdir(args.kraken_db):
-        logging.error(f"Kraken database directory '{args.kraken_db}' not found.")
+        logging.error(f"Kraken DB '{args.kraken_db}' not found.")
         sys.exit(1)
     if args.bowtie2_index and not os.path.exists(args.bowtie2_index + ".1.bt2"):
         logging.error(f"Bowtie2 index '{args.bowtie2_index}' not found.")
@@ -64,27 +69,27 @@ def validate_inputs(args):
 def process_samples(args):
     run_bowtie = not args.no_bowtie2 and args.bowtie2_index is not None
     for forward in glob.glob(os.path.join(args.input_dir, "*_R1*.fastq*")):
-        base_name = os.path.basename(forward)
-        for pattern in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz", "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
-            base_name = base_name.replace(pattern, "")
-
+        base = os.path.basename(forward)
+        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz",
+                    "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
+            base = base.replace(pat, "")
         reverse = None
         if not args.use_assembly or args.paired_assembly:
-            reverse_candidates = [
-                os.path.join(args.input_dir, f"{base_name}_R2_001.fastq.gz"),
-                os.path.join(args.input_dir, f"{base_name}_R2.fastq.gz"),
-                os.path.join(args.input_dir, f"{base_name}_R2.fastq")
+            candidates = [
+                os.path.join(args.input_dir, f"{base}_R2_001.fastq.gz"),
+                os.path.join(args.input_dir, f"{base}_R2.fastq.gz"),
+                os.path.join(args.input_dir, f"{base}_R2.fastq")
             ]
-            reverse = next((f for f in reverse_candidates if os.path.isfile(f)), None)
+            reverse = next((r for r in candidates if os.path.isfile(r)), None)
             if not reverse and not args.use_assembly:
-                logging.warning(f"No matching R2 file found for {base_name}. Skipping.")
+                logging.warning(f"No R2 found for {base}, skipping.")
                 continue
 
-        logging.info(f"Processing sample {base_name} (Assembly: {args.use_assembly})")
+        logging.info(f"Processing sample {base} (assembly={args.use_assembly})")
         process_sample(
             forward=forward,
             reverse=reverse,
-            base_name=base_name,
+            base_name=base,
             bowtie2_index=args.bowtie2_index,
             kraken_db=args.kraken_db,
             output_dir=args.output_dir,
@@ -98,70 +103,95 @@ def process_samples(args):
 
 def handle_metadata(args):
     if args.no_metadata:
-        sample_id_df = create_sample_id_df(args.input_dir)
-        sample_id_df.to_csv(os.path.join(args.output_dir, "sample_ids.csv"), index=False)
-        return aggregate_kraken_results(args.output_dir, sample_id_df=sample_id_df, read_count=args.read_count, max_read_count=args.max_read_count)
-    return aggregate_kraken_results(args.output_dir, metadata_file=args.metadata_file, read_count=args.read_count, max_read_count=args.max_read_count)
+        df = create_sample_id_df(args.input_dir)
+        df.to_csv(os.path.join(args.output_dir, "sample_ids.csv"), index=False)
+        return aggregate_kraken_results(
+            args.output_dir,
+            sample_id_df=df,
+            read_count=args.read_count,
+            max_read_count=args.max_read_count
+        )
+    return aggregate_kraken_results(
+        args.output_dir,
+        metadata_file=args.metadata_file,
+        read_count=args.read_count,
+        max_read_count=args.max_read_count
+    )
 
 def main():
-    parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description="Metagenomics pipeline for taxonomic classification and analysis"
+    )
     parser.add_argument("--kraken_db", required=True)
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--input_dir", required=True)
     parser.add_argument("--bowtie2_index")
     parser.add_argument("--threads", type=int, default=8)
+    parser.add_argument(
+        "--diamond_db",
+        default="/home/soumareh/mnt/nrdb/nr",
+        help="Path to the Diamond-formatted NR database"
+    )
     parser.add_argument("--metadata_file")
     parser.add_argument("--read_count", type=int, default=1)
     parser.add_argument("--top_N", type=int, default=10000)
     parser.add_argument("--max_read_count", type=int, default=5000000000)
-    parser.add_argument("--no_bowtie2", action='store_true')
-    parser.add_argument("--no_metadata", action='store_true')
-    parser.add_argument("--use_precomputed_reports", action='store_true')
-    parser.add_argument("--use_assembly", action='store_true')
-    parser.add_argument("--paired_assembly", action='store_true')
-    parser.add_argument("--skip_preprocessing", action='store_true')
-    parser.add_argument("--bacteria", action='store_true')
-    parser.add_argument("--virus", action='store_true')
-    parser.add_argument("--archaea", action='store_true')
-    parser.add_argument("--eukaryota", action='store_true')
+    parser.add_argument("--no_bowtie2", action="store_true")
+    parser.add_argument("--no_metadata", action="store_true")
+    parser.add_argument("--use_precomputed_reports", action="store_true")
+    parser.add_argument("--use_assembly", action="store_true")
+    parser.add_argument("--paired_assembly", action="store_true")
+    parser.add_argument("--skip_preprocessing", action="store_true")
+    parser.add_argument("--bacteria", action="store_true")
+    parser.add_argument("--virus", action="store_true")
+    parser.add_argument("--archaea", action="store_true")
+    parser.add_argument("--eukaryota", action="store_true")
     parser.add_argument("--run_ref_base", action="store_true")
     parser.add_argument("--run_deno_ref", action="store_true")
-    parser.add_argument("--skip_multiqc", action='store_true')
-    parser.add_argument("--skip_reports", action='store_true')
+    parser.add_argument("--skip_multiqc", action="store_true")
+    parser.add_argument("--skip_reports", action="store_true")
     parser.add_argument("--filtered_tsv")
-    parser.add_argument("--skip_existing", action='store_true')
-    parser.add_argument("--process_all_ranks", action='store_true')
-    parser.add_argument("--col_filter", type=str, nargs='+')
-    parser.add_argument("--pat_to_keep", type=str, nargs='+')
+    parser.add_argument("--skip_existing", action="store_true")
+    parser.add_argument("--process_all_ranks", action="store_true")
+    parser.add_argument("--col_filter", type=str, nargs="+")
+    parser.add_argument("--pat_to_keep", type=str, nargs="+")
 
     args = parser.parse_args()
-
     os.makedirs(args.output_dir, exist_ok=True)
     validate_inputs(args)
 
     process_samples(args)
-    merged_tsv_path = handle_metadata(args)
+    merged_tsv = handle_metadata(args)
 
     if not args.skip_reports:
-        logging.info("Processing Kraken reports...")
-        process_kraken_reports(args.output_dir)  # Process Kraken2 reports
-        logging.info("Processing output reports...")
-        process_output_reports(args.output_dir)  # Process Kraken2 output reports
+        logging.info("Processing Kraken reports…")
+        process_kraken_reports(args.output_dir)
+        logging.info("Processing output reports…")
+        process_output_reports(args.output_dir)
 
-    if args.process_all_ranks:
-        if args.no_metadata:
-            sample_id_df = create_sample_id_df(args.input_dir)
-            sample_id_df.to_csv(os.path.join(args.output_dir, "sample_ids.csv"), index=False)
-            process_all_ranks(args.output_dir, sample_id_df=sample_id_df,
-                              read_count=args.read_count, max_read_count=args.max_read_count,
-                              top_N=args.top_N, col_filter=args.col_filter, pat_to_keep=args.pat_to_keep)
-        else:
-            if not args.metadata_file or not os.path.isfile(args.metadata_file):
-                logging.error(f"Metadata file '{args.metadata_file}' not found.")
-                sys.exit(1)
-            process_all_ranks(args.output_dir, metadata_file=args.metadata_file,
-                              read_count=args.read_count, max_read_count=args.max_read_count,
-                              top_N=args.top_N, col_filter=args.col_filter, pat_to_keep=args.pat_to_keep)
+    # Assembly‐based contig extraction & Diamond annotation
+    if args.use_assembly:
+        logging.info("Running contig extraction and Diamond annotation…")
+        extract_contigs_diamond.extract_contigs(
+            base_contigs_dir=args.output_dir,
+            summary_filename=os.path.join(args.output_dir, "contigs_summary.tsv")
+        )
+        extract_contigs_diamond.merge_and_rename_contigs(
+            base_contigs_dir=args.output_dir,
+            merged_filename=os.path.join(args.output_dir, "merged_contigs_renamed.fasta")
+        )
+        extract_contigs_diamond.run_diamond(
+            diamond_db=args.diamond_db,
+            query_file=os.path.join(args.output_dir, "merged_contigs_renamed.fasta"),
+            output_file=os.path.join(args.output_dir, "results.m8"),
+            threads=args.threads
+        )
+        extract_contigs_diamond.process_diamond_results(
+            results_filename=os.path.join(args.output_dir, "results.m8"),
+            extracted_csv=os.path.join(args.output_dir, "extracted_virus.csv"),
+            extracted_csv1=os.path.join(args.output_dir, "extracted_virus1.csv")
+        )
+        logging.info("Contig extraction and Diamond steps complete.")
 
     if not args.skip_multiqc:
         run_multiqc(args.output_dir)
