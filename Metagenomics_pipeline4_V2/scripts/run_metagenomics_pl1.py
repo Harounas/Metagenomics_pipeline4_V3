@@ -27,7 +27,7 @@ from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
 from Metagenomics_pipeline4_V2.ref_based_assembly import ref_based
 from Metagenomics_pipeline4_V2.deno_ref_assembly2 import deno_ref_based
 
-import Metagenomics_pipeline4_V2.extract_contigs_diamond  # our contig‐extraction & Diamond module
+from Metagenomics_pipeline4_V2 import extract_contigs_diamond  # our contig‐extraction & Diamond module
 
 # Configure logging
 logging.basicConfig(
