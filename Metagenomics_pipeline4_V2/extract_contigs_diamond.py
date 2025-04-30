@@ -18,47 +18,44 @@ Entrez.email = "harounasoum17@gmail.com"
 
 def extract_contigs(base_contigs_dir, summary_filename="contigs_summary.tsv"):
     """
-    Extract viral contigs (>500 bp) based on Kraken2 reports, write per‑taxon FASTA files,
+    Extract viral contigs (>500 bp) based on Kraken2 reports, write per-taxon FASTA files,
     and save a summary TSV.
 
-    Expects for each sample subdirectory under base_contigs_dir:
-      - {sample_id}_Viruses_kraken_report.txt  (in CWD)
-      - {sample_id}_kraken2_output.txt         (in CWD)
-      - contigs.fasta                           (in sample subdir)
+    Expects:
+      - {sample_id}_Viruses_kraken_report.txt (in base_contigs_dir)
+      - {sample_id}_kraken2_output.txt (in base_contigs_dir)
+      - contigs.fasta (in base_contigs_dir/{sample_id}/)
     """
-    allowed_ranks = {"F","F1","F2","G","G1","G2","S","S1","S2"}
+    allowed_ranks = {"F", "F1", "F2", "G", "G1", "G2", "S", "S1", "S2"}
     base_dir = Path(base_contigs_dir)
 
     with open(summary_filename, "w") as summary_f:
         summary_f.write("sample_id\ttaxon_id\tpathogen\tlong_contigs\tshort_contigs\n")
 
-        for sample_dir in base_dir.iterdir():
-            if not sample_dir.is_dir():
-                continue
-            sid = sample_dir.name
-            rpt = f"{sid}_Viruses_kraken_report.txt"
-            kout = f"{sid}_kraken2_output.txt"
-            fasta = sample_dir / "contigs.fasta"
+        for rpt_path in base_dir.glob("*_Viruses_kraken_report.txt"):
+            sid = rpt_path.stem.replace("_Viruses_kraken_report", "")
+            kout_path = base_dir / f"{sid}_kraken2_output.txt"
+            contigs_path = base_dir / sid / "contigs.fasta"
 
-            if not os.path.exists(rpt) or not os.path.exists(kout) or not fasta.exists():
-                print(f"Skipping {sid}: missing {rpt}, {kout}, or {fasta}")
+            if not rpt_path.exists() or not kout_path.exists() or not contigs_path.exists():
+                print(f"Skipping {sid}: missing required files.")
                 continue
 
             print(f"\nExtracting from sample {sid}")
             taxon_map = {}
-            with open(rpt) as f:
+            with open(rpt_path) as f:
                 for row in csv.reader(f, delimiter="\t"):
                     if len(row) < 6 or row[3] not in allowed_ranks:
                         continue
                     tid = row[4].strip()
-                    pname = row[5].strip().replace(" ","_").replace("\\","_").replace("/","_")
-                    if any(tok in pname.lower() for tok in ("virus","virinae","viridae")):
+                    pname = row[5].strip().replace(" ", "_").replace("\\", "_").replace("/", "_")
+                    if any(tok in pname.lower() for tok in ("virus", "virinae", "viridae")):
                         taxon_map[tid] = pname
             if not taxon_map:
                 continue
 
             contig_dict = {}
-            with open(kout) as f:
+            with open(kout_path) as f:
                 for row in csv.reader(f, delimiter="\t"):
                     if len(row) < 3:
                         continue
@@ -71,10 +68,10 @@ def extract_contigs(base_contigs_dir, summary_filename="contigs_summary.tsv"):
 
             for tid, clist in contig_dict.items():
                 pname = taxon_map[tid]
-                outfa = sample_dir / f"{sid}_{pname}.fasta"
+                outfa = contigs_path.parent / f"{sid}_{pname}.fasta"
                 long_c = short_c = 0
                 with open(outfa, "w") as out:
-                    for rec in SeqIO.parse(str(fasta), "fasta"):
+                    for rec in SeqIO.parse(str(contigs_path), "fasta"):
                         if rec.id in clist:
                             if len(rec.seq) > 500:
                                 SeqIO.write(rec, out, "fasta")
@@ -84,19 +81,14 @@ def extract_contigs(base_contigs_dir, summary_filename="contigs_summary.tsv"):
 
                 if long_c == 0:
                     outfa.unlink()
-                    print(f"  Deleted {outfa} ({short_c} ≤500 bp)")
+                    print(f"  Deleted {outfa} ({short_c} ≤500 bp)")
                 else:
-                    print(f"  Wrote {outfa}: {long_c} >500 bp, {short_c} ≤500 bp")
+                    print(f"  Wrote {outfa}: {long_c} >500 bp, {short_c} ≤500 bp")
                 summary_f.write(f"{sid}\t{tid}\t{pname}\t{long_c}\t{short_c}\n")
 
     print(f"\nContig extraction done; summary → {summary_filename}")
 
-
 def merge_and_rename_contigs(base_contigs_dir, merged_filename="merged_contigs_renamed.fasta"):
-    """
-    Merge all per‑taxon FASTA files under base_contigs_dir into one file,
-    renaming each header to prefix with the sample ID.
-    """
     base_dir = Path(base_contigs_dir)
     merged = Path(merged_filename)
 
@@ -116,12 +108,8 @@ def merge_and_rename_contigs(base_contigs_dir, merged_filename="merged_contigs_r
                 print(f"  Merged {fp}")
     print(f"\nMerged FASTA → {merged_filename}")
 
-
 def run_diamond(diamond_db, query_file="merged_contigs_renamed.fasta",
                 output_file="results.m8", threads=8):
-    """
-    Run Diamond BLASTX on query_file against diamond_db using specified threads.
-    """
     cmd = [
         "diamond", "blastx",
         "--query", query_file,
@@ -136,13 +124,9 @@ def run_diamond(diamond_db, query_file="merged_contigs_renamed.fasta",
     except subprocess.CalledProcessError as e:
         print("Diamond failed:", e)
 
-
 def process_diamond_results(results_filename="results.m8",
                             extracted_csv="extracted_virus.csv",
                             extracted_csv1="extracted_virus1.csv"):
-    """
-    Annotate Diamond hits via Entrez, compute custom score, and save CSVs.
-    """
     df = pd.read_csv(results_filename, sep="\t", header=None)
     df.columns = [
         'query_id','subject_id','pident','aln_len',
