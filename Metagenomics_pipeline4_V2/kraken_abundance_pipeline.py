@@ -57,7 +57,7 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
             unmapped_r1, unmapped_r2 = trimmed_forward, trimmed_reverse
             if run_bowtie:
                 bowtie_unmapped_r1 = os.path.join(output_dir, f"{base_name}_unmapped_1.fastq.gz")
-                bowtie_unmapped_r2 = os.path.join(output_dir, f"{base_name}_unmapped_1.fastq.gz")
+                bowtie_unmapped_r2 = os.path.join(output_dir, f"{base_name}_unmapped_2.fastq.gz")
                 if not skip_existing or not (os.path.exists(bowtie_unmapped_r1) and os.path.exists(bowtie_unmapped_r2)):
                     logging.info(f"Running Bowtie2 for sample {base_name}")
                     run_bowtie2(trimmed_forward, trimmed_reverse, base_name, bowtie2_index, output_dir, threads)
