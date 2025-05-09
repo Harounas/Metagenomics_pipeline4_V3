@@ -30,9 +30,7 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
                    run_bowtie, use_precomputed_reports, use_assembly,
                    skip_preprocessing=False, skip_existing=False):
     try:
-        # summary report path
         kraken_report = os.path.join(output_dir, f"{base_name}_kraken_report.txt")
-        # use the summary report for downstream splitting
         output_report = kraken_report
 
         if use_precomputed_reports:
@@ -40,7 +38,6 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
                 raise FileNotFoundError(f"Precomputed Kraken2 report not found for {base_name}")
             return kraken_report, output_report
 
-        # Step 1: optionally skip preprocessing and assembly
         if skip_preprocessing:
             contigs_file = os.path.join(output_dir, f"{base_name}_contigs.fasta")
             if skip_existing and os.path.exists(contigs_file):
@@ -50,8 +47,8 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
                 contigs_file = run_spades(forward, reverse, base_name, output_dir, threads)
             kraken_input = contigs_file
         else:
-            trimmed_forward = os.path.join(output_dir, f"{base_name}_1_trimmed_paired.fq.gz")
-            trimmed_reverse = os.path.join(output_dir, f"{base_name}_2_trimmed_paired.fq.gz")
+            trimmed_forward = os.path.join(output_dir, f"{base_name}_trimmed_R1.fastq.gz")
+            trimmed_reverse = os.path.join(output_dir, f"{base_name}_trimmed_R2.fastq.gz")
 
             if not skip_existing or not (os.path.exists(trimmed_forward) and os.path.exists(trimmed_reverse)):
                 logging.info(f"Running Trimmomatic for sample {base_name}")
@@ -68,7 +65,6 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
 
             kraken_input = run_spades(unmapped_r1, unmapped_r2, base_name, output_dir, threads) if use_assembly else unmapped_r1
 
-        # Step 2: run Kraken2 classification
         if not skip_existing or not os.path.exists(kraken_report):
             logging.info(f"Running Kraken2 for sample {base_name}")
             if use_assembly or skip_preprocessing:
@@ -76,7 +72,6 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
             else:
                 run_kraken2(unmapped_r1, unmapped_r2, base_name, kraken_db, output_dir, threads)
 
-        # Step 3: split domain report if present
         if os.path.exists(output_report):
             logging.info(f"Running Output Analysis for sample {base_name}")
             process_output_report(output_report, output_dir)
