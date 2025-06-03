@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-run_metagenomics_pl1.py
+run_metagenomics_pl2.py
 
 Metagenomics pipeline including Kraken2 classification, optional assembly‐based contig
 extraction & Diamond annotation, and downstream analyses.
