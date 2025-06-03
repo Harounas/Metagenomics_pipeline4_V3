@@ -11,7 +11,7 @@ setup(
     entry_points={
     "console_scripts": [
         
-"run_metagenomics_pl2=Metagenomics_pipeline4_V3.scripts.run_metagenomics_pl2:main",
+"run_metagenomics_pl2=Metagenomics_pipeline4_V2.scripts.run_metagenomics_pl2:main",
     ],
 },
 
