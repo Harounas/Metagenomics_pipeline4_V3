@@ -50,6 +50,65 @@ def extract_and_merge_contigs(base_contigs_dir, output_fasta="merged_contigs.fas
 # Example usage
 # extract_and_merge_contigs("/path/to/base_contigs_dir")
 
+import subprocess
+from pathlib import Path
+
+def run_genomad_and_cluster(input_fasta, output_dir, genomad_db, final_output, 
+                            min_length=200, identity=0.95, word_size=10, 
+                            mem_mb=16000, threads=8):
+    """
+    Runs geNomad end-to-end and clusters viral contigs using cd-hit-est.
+    
+    Args:
+        input_fasta (str): Path to input merged contigs FASTA file.
+        output_dir (str): Path to store geNomad output.
+        genomad_db (str): Path to geNomad database directory.
+        final_output (str): Path for the final clustered FASTA output.
+        min_length (int): Minimum contig length for geNomad.
+        identity (float): Identity threshold for cd-hit-est.
+        word_size (int): Word size for cd-hit-est.
+        mem_mb (int): Memory (MB) for cd-hit-est.
+        threads (int): Number of threads.
+    """
+    # 1️⃣ geNomad end-to-end
+    genomad_cmd = [
+        "genomad", "end-to-end",
+        input_fasta, output_dir,
+        "--db-dir", genomad_db,
+        "--min-length", str(min_length),
+        "--threads", str(threads)
+    ]
+    print(f"🚀 Running geNomad:\n{' '.join(genomad_cmd)}")
+    subprocess.run(genomad_cmd, check=True)
+
+    # 2️⃣ Path to geNomad's viral contigs output
+    virus_fasta = Path(output_dir) /"merged_contigs_filtered_summary/merged_filtered_contigs_virus.fna"
+    if not virus_fasta.exists():
+        raise FileNotFoundError(f"Viral contigs FASTA not found: {virus_fasta}")
+
+    # 3️⃣ cd-hit-est clustering
+    cdhit_cmd = [
+        "cd-hit-est",
+        "-i", str(virus_fasta),
+        "-o", final_output,
+        "-c", str(identity),
+        "-n", str(word_size),
+        "-d", "0",
+        "-M", str(mem_mb),
+        "-T", str(threads)
+    ]
+    print(f"🚀 Running cd-hit-est:\n{' '.join(cdhit_cmd)}")
+    subprocess.run(cdhit_cmd, check=True)
+
+    print(f"\n✅ Pipeline complete! Final clustered FASTA: {final_output}")
+
+# Example usage
+# run_genomad_and_cluster(
+#     "../../250328_VH01476_21_AACN7NGHV/merged_filtered_contigs.fasta",
+#     "output_dir",
+#     "../genomad_db/",
+#     "output_dir/clustered_contigs.fna"
+# )
 
 def merge_and_rename_contigs(base_contigs_dir, merged_filename="merged_contigs_renamed.fasta"):
     base_dir = Path(base_contigs_dir)
