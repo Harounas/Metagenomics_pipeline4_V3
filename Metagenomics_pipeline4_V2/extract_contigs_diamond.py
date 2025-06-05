@@ -16,77 +16,40 @@ import pandas as pd
 # Set your email for NCBI Entrez usage
 Entrez.email = "harounasoum17@gmail.com"
 
-def extract_contigs(base_contigs_dir, summary_filename="contigs_summary.tsv"):
+from pathlib import Path
+from Bio import SeqIO
+import csv
+
+def extract_and_merge_contigs(base_contigs_dir, output_fasta="merged_contigs.fasta", min_length=200):
     """
-    Extract viral contigs (>500 bp) based on Kraken2 reports, write per-taxon FASTA files,
-    and save a summary TSV.
+    Extracts contigs >200 bp from each sample's contigs.fasta,
+    regardless of taxon, and merges them into one output FASTA.
 
     Expects:
-      - {sample_id}_Viruses_kraken_report.txt (in base_contigs_dir)
-      - {sample_id}_kraken2_output.txt (in base_contigs_dir)
-      - contigs.fasta (in base_contigs_dir/{sample_id}/)
+      - contigs.fasta files in {base_contigs_dir}/{sample_id}/
     """
-    allowed_ranks = {"F", "F1", "F2", "G", "G1", "G2", "S", "S1", "S2"}
     base_dir = Path(base_contigs_dir)
+    merged_records = []
 
-    with open(summary_filename, "w") as summary_f:
-        summary_f.write("sample_id\ttaxon_id\tpathogen\tlong_contigs\tshort_contigs\n")
+    for contigs_fasta in base_dir.glob("*/contigs.fasta"):
+        sid = contigs_fasta.parent.name
+        print(f"Processing {sid}")
 
-        for rpt_path in base_dir.glob("*_Viruses_kraken_report.txt"):
-            sid = rpt_path.stem.replace("_Viruses_kraken_report", "")
-            kout_path = base_dir / f"{sid}_kraken2_output.txt"
-            contigs_path = base_dir / sid / "contigs.fasta"
+        for rec in SeqIO.parse(str(contigs_fasta), "fasta"):
+            if len(rec.seq) > min_length:
+                rec.id = f"{sid}|{rec.id}"  # Prefix with sample ID for clarity
+                rec.description = ""  # Remove long description
+                merged_records.append(rec)
 
-            if not rpt_path.exists() or not kout_path.exists() or not contigs_path.exists():
-                print(f"Skipping {sid}: missing required files.")
-                continue
+    if merged_records:
+        SeqIO.write(merged_records, output_fasta, "fasta")
+        print(f"✅ Merged {len(merged_records)} contigs >{min_length} bp into {output_fasta}")
+    else:
+        print("⚠️ No contigs found >200 bp in any sample.")
 
-            print(f"\nExtracting from sample {sid}")
-            taxon_map = {}
-            with open(rpt_path) as f:
-                for row in csv.reader(f, delimiter="\t"):
-                    if len(row) < 6 or row[3] not in allowed_ranks:
-                        continue
-                    tid = row[4].strip()
-                    pname = row[5].strip().replace(" ", "_").replace("\\", "_").replace("/", "_")
-                    if any(tok in pname.lower() for tok in ("virus", "virinae", "viridae")):
-                        taxon_map[tid] = pname
-            if not taxon_map:
-                continue
+# Example usage
+# extract_and_merge_contigs("/path/to/base_contigs_dir")
 
-            contig_dict = {}
-            with open(kout_path) as f:
-                for row in csv.reader(f, delimiter="\t"):
-                    if len(row) < 3:
-                        continue
-                    cid, info = row[1].strip(), row[2]
-                    for tid in taxon_map:
-                        if f"taxid {tid}" in info:
-                            contig_dict.setdefault(tid, []).append(cid)
-            if not contig_dict:
-                continue
-
-            for tid, clist in contig_dict.items():
-                pname = taxon_map[tid]
-                outfa = contigs_path.parent / f"{sid}_{pname}.fasta"
-                long_c = short_c = 0
-                with open(outfa, "w") as out:
-                    for rec in SeqIO.parse(str(contigs_path), "fasta"):
-                        if rec.id in clist:
-                            if len(rec.seq) > 500:
-                                SeqIO.write(rec, out, "fasta")
-                                long_c += 1
-                            else:
-                                short_c += 1
-
-                if long_c == 0:
-                    outfa.unlink()
-                    print(f"  Deleted {outfa} ({short_c} ≤500 bp)")
-                else:
-                    print(f"  Wrote {outfa}: {long_c} >500 bp, {short_c} ≤500 bp")
-                summary_f.write(f"{sid}\t{tid}\t{pname}\t{long_c}\t{short_c}\n")
-
-    print(f"\nContig extraction done; summary → {summary_filename}")
 
 def merge_and_rename_contigs(base_contigs_dir, merged_filename="merged_contigs_renamed.fasta"):
     base_dir = Path(base_contigs_dir)
