@@ -100,7 +100,7 @@ def run_genomad_and_cluster(input_fasta, output_dir, genomad_db, final_output="c
     print(f"🚀 Running cd-hit-est:\n{' '.join(cdhit_cmd)}")
     subprocess.run(cdhit_cmd, check=True)
 
-    print(f"\n✅ Pipeline complete! Final clustered FASTA: {final_output}")
+    print(f"\n✅ Pipeline complete! Final clustered FASTA: {output_dir/final_output}")
 
 # Example usage
 # run_genomad_and_cluster(
@@ -110,7 +110,7 @@ def run_genomad_and_cluster(input_fasta, output_dir, genomad_db, final_output="c
 #     "output_dir/clustered_contigs.fna"
 # )
 
-
+"""
 def merge_and_rename_contigs(base_contigs_dir, merged_filename=f"{output_dir}/{final_output}"):
     base_dir = Path(base_contigs_dir)
     merged = Path(merged_filename)
@@ -130,7 +130,7 @@ def merge_and_rename_contigs(base_contigs_dir, merged_filename=f"{output_dir}/{f
                             out.write(line)
                 print(f"  Merged {fp}")
     print(f"\nMerged FASTA → {merged_filename}")
-
+"""
 def run_diamond(diamond_db, query_file="merged_contigs_renamed.fasta",
                 output_file="results.m8", threads=8):
     cmd = [
