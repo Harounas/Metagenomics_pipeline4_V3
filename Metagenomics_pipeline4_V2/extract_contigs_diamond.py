@@ -53,7 +53,7 @@ def extract_and_merge_contigs(base_contigs_dir, output_fasta="merged_contigs.fas
 import subprocess
 from pathlib import Path
 
-def run_genomad_and_cluster(input_fasta, output_dir, genomad_db, final_output, 
+def run_genomad_and_cluster(input_fasta, output_dir, genomad_db, final_output="clustered_contigs.fasta", 
                             min_length=200, identity=0.95, word_size=10, 
                             mem_mb=16000, threads=8):
     """
@@ -82,7 +82,7 @@ def run_genomad_and_cluster(input_fasta, output_dir, genomad_db, final_output,
     subprocess.run(genomad_cmd, check=True)
 
     # 2️⃣ Path to geNomad's viral contigs output
-    virus_fasta = Path(output_dir) /"merged_contigs_filtered_summary/merged_filtered_contigs_virus.fna"
+    virus_fasta = Path(output_dir) /"merged_contigs_filtered_summary/merged_contigs_virus.fna"
     if not virus_fasta.exists():
         raise FileNotFoundError(f"Viral contigs FASTA not found: {virus_fasta}")
 
@@ -90,7 +90,7 @@ def run_genomad_and_cluster(input_fasta, output_dir, genomad_db, final_output,
     cdhit_cmd = [
         "cd-hit-est",
         "-i", str(virus_fasta),
-        "-o", final_output,
+        "-o", output_dir/final_output,
         "-c", str(identity),
         "-n", str(word_size),
         "-d", "0",
@@ -110,7 +110,8 @@ def run_genomad_and_cluster(input_fasta, output_dir, genomad_db, final_output,
 #     "output_dir/clustered_contigs.fna"
 # )
 
-def merge_and_rename_contigs(base_contigs_dir, merged_filename="merged_contigs_renamed.fasta"):
+
+def merge_and_rename_contigs(base_contigs_dir, merged_filename=f"{output_dir}/{final_output}"):
     base_dir = Path(base_contigs_dir)
     merged = Path(merged_filename)
 
