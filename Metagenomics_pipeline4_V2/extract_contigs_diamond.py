@@ -126,6 +126,35 @@ def extract_and_merge_contigs(base_contigs_dir: str,
         print(f"⚠️ No contigs found >{min_length} bp in any sample.")
 
 
+
+
+
+def run_genomad(input_fasta: str, output_dir: str, genomad_db: str, min_score: float = 0.5, threads: int = 8) -> Path:
+    """
+    Runs geNomad end-to-end pipeline to identify viral contigs.
+    Returns the path to the viral contigs FASTA.
+    """
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    genomad_cmd = [
+        "genomad", "end-to-end",
+        input_fasta,
+        str(out_dir),
+        "--db-dir", genomad_db,
+        "--min-score", str(min_score),
+        "--threads", str(threads)
+    ]
+    print("🚀 Running geNomad:\n", " ".join(genomad_cmd))
+    subprocess.run(genomad_cmd, check=True)
+
+    virus_fasta = out_dir / "merged_contigs_filtered_summary" / "merged_contigs_virus.fna"
+    if not virus_fasta.exists():
+        raise FileNotFoundError(f"Viral contigs FASTA not found: {virus_fasta}")
+    
+    return virus_fasta
+
+"""
 def run_genomad_and_cluster(input_fasta: str,
                             output_dir: str,
                             genomad_db: str,
@@ -176,7 +205,7 @@ def run_genomad_and_cluster(input_fasta: str,
 
     print(f"\n✅ Pipeline complete! Final clustered FASTA: {clustered_fasta}")
 
-
+"""
 def extract_long_contigs(input_fasta: str,
                           output_fasta: str,
                           min_length: int = 500) -> None:
