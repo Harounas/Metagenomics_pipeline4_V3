@@ -232,7 +232,7 @@ def run_genomad(input_fasta: str, output_dir: str, genomad_db: str,
     print("🚀 Running geNomad:\n", " ".join(genomad_cmd))
     subprocess.run(genomad_cmd, check=True)
 
-    virus_fasta = out_dir / "merged_contigs_genomad" / "merged_contigs_genomad_virus.fna"
+    virus_fasta = out_dir / "merged_contigs_genomad_summary" / "merged_contigs_genomad_virus.fna"
     if not virus_fasta.exists():
         raise FileNotFoundError(f"Viral contigs FASTA not found: {virus_fasta}")
 
