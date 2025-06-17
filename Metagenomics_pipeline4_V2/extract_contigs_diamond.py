@@ -222,13 +222,13 @@ def run_genomad(input_fasta: str, output_dir: str, genomad_db: str,
     out_dir.mkdir(parents=True, exist_ok=True)
 
     genomad_cmd = [
-        "genomad", "end-to-end",
-        input_fasta,
-        str(out_dir),
-        "--db-dir", genomad_db,
-        "--min-score", str(min_score),
-        "--threads", str(threads)
-    ]
+    "genomad", "end-to-end",
+    input_fasta,
+    str(out_dir),
+    "--database", genomad_db,
+    "--min-score", str(min_score),
+    "--threads", str(threads)
+]
     print("🚀 Running geNomad:\n", " ".join(genomad_cmd))
     subprocess.run(genomad_cmd, check=True)
 
