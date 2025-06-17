@@ -220,7 +220,7 @@ def main():
             )
 
            # Run geNomad using genomad_input_fasta (from extract_and_merge_contigs_genomad)
-           genomad_output_viral_fasta = extract_contigs_diamond.run_genomad(
+            genomad_output_viral_fasta = extract_contigs_diamond.run_genomad(
             input_fasta=genomad_input_fasta,
             output_dir=genomad_out_dir,
             genomad_db=args.genomad_db,
@@ -228,17 +228,17 @@ def main():
             )
 
         # Prepare to merge geNomad and Kraken long contig results
-           merged_combined_fasta = os.path.join(args.output_dir, "combined_contigs_for_clustering.fasta")
+            merged_combined_fasta = os.path.join(args.output_dir, "combined_contigs_for_clustering.fasta")
 
-           extract_contigs_diamond.filter_and_merge(
-           fasta_paths=[genomad_output_viral_fasta, long_contigs_fasta],
-           min_length=200,
-           output_path=merged_combined_fasta)
+            extract_contigs_diamond.filter_and_merge(
+            fasta_paths=[genomad_output_viral_fasta, long_contigs_fasta],
+            min_length=200,
+            output_path=merged_combined_fasta)
 
 # Use merged_combined_fasta as input for clustering
-clustered_fasta = extract_contigs_diamond.cluster_contigs(
-    virus_fasta=merged_combined_fasta,
-    output_dir=clustered_out_dir,
+            clustered_fasta = extract_contigs_diamond.cluster_contigs(
+            virus_fasta=merged_combined_fasta,
+            output_dir=clustered_out_dir,
     threads=args.threads
 )
 
