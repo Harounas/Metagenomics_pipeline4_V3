@@ -27,7 +27,7 @@ from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
 from Metagenomics_pipeline4_V2.ref_based_assembly import ref_based
 from Metagenomics_pipeline4_V2.deno_ref_assembly2 import deno_ref_based
 
-from Metagenomics_pipeline4_V2 import extract_contigs_diamond  # our contig‐extraction & Diamond module
+from Metagenomics_pipeline4_V2 import extract_contigs_diamond  # contig extraction & Diamond annotation
 
 # Configure logging
 logging.basicConfig(
@@ -132,6 +132,7 @@ def main():
         default="/home/soumareh/mnt/nrdb/nr",
         help="Path to the Diamond-formatted NR database"
     )
+    parser.add_argument("--diamond", action="store_true", help="Enable contig extraction and Diamond annotation")
     parser.add_argument("--metadata_file")
     parser.add_argument("--read_count", type=int, default=1)
     parser.add_argument("--top_N", type=int, default=10000)
@@ -170,28 +171,30 @@ def main():
         process_output_reports(args.output_dir)
 
     # Assembly‐based contig extraction & Diamond annotation
-    if args.use_assembly:
+    if args.use_assembly and args.diamond:
         logging.info("Running contig extraction and Diamond annotation…")
-        extract_contigs_diamond.extract_contigs(
+
+        long_contig_fasta = extract_contigs_diamond.extract_long_contigs_kraken(
             base_contigs_dir=args.output_dir,
-            summary_filename=os.path.join(args.output_dir, "contigs_summary.tsv")
+            output_tsv=os.path.join(args.output_dir, "long_contigs_summary.tsv")
         )
-        extract_contigs_diamond.merge_and_rename_contigs(
-            base_contigs_dir=args.output_dir,
-            merged_filename=os.path.join(args.output_dir, "merged_contigs_renamed.fasta")
-        )
+
         extract_contigs_diamond.run_diamond(
             diamond_db=args.diamond_db,
-            query_file=os.path.join(args.output_dir, "merged_contigs_renamed.fasta"),
+            query_file=str(long_contig_fasta),
             output_file=os.path.join(args.output_dir, "results.m8"),
             threads=args.threads
         )
+
         extract_contigs_diamond.process_diamond_results(
-            results_filename=os.path.join(args.output_dir, "results.m8"),
-            extracted_csv=os.path.join(args.output_dir, "extracted_virus.csv"),
-            extracted_csv1=os.path.join(args.output_dir, "extracted_virus1.csv")
+            results_file=os.path.join(args.output_dir, "results.m8"),
+            out_csv=os.path.join(args.output_dir, "extracted_virus.csv"),
+            sorted_csv=os.path.join(args.output_dir, "extracted_virus_sorted.csv")
         )
+
         logging.info("Contig extraction and Diamond steps complete.")
+    elif args.use_assembly and not args.diamond:
+        logging.info("Assembly was enabled, but Diamond annotation was skipped (--diamond not provided).")
 
     if not args.skip_multiqc:
         run_multiqc(args.output_dir)
@@ -204,14 +207,24 @@ def main():
     if not args.skip_reports:
         domains = ["Bacteria", "Viruses", "Archaea", "Eukaryota"]
         domain_flags = [args.bacteria, args.virus, args.archaea, args.eukaryota]
-        domain_rank_codes = {"Bacteria": ['S','S1','S1','S2' ,'F','F1','F2','F3', 'D','D1','D2','D3'], "Viruses": ['S','S1','S1','S2' ,'F','F1','F2','F3', 'D','D1','D2','D3'], "Archaea": ['S','S1','S1','S2' ,'F','F1','F2','F3', 'D','D1','D2','D3'], "Eukaryota": ['S','S1','S1','S2' ,'F','F1','F2','F3', 'D','D1','D2','D3']}
+        domain_rank_codes = {
+            "Bacteria": ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
+            "Viruses":  ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
+            "Archaea":  ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
+            "Eukaryota":['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3']
+        }
 
         for domain, flag in zip(domains, domain_flags):
             if flag:
                 for rank in domain_rank_codes[domain]:
                     merged_tsv = aggregate_kraken_results(
-                        args.output_dir, args.metadata_file, sample_id_df,
-                        {domain: args.read_count}, {domain: args.max_read_count}, rank, domain
+                        args.output_dir,
+                        args.metadata_file,
+                        sample_id_df,
+                        {domain: args.read_count},
+                        {domain: args.max_read_count},
+                        rank,
+                        domain
                     )
                     if args.filtered_tsv and os.path.isfile(args.filtered_tsv):
                         merged_tsv = args.filtered_tsv
@@ -219,18 +232,18 @@ def main():
                         generate_abundance_plots(merged_tsv, args.top_N, args.col_filter, args.pat_to_keep, rank)
                         if args.run_ref_base:
                             df = pd.read_csv(merged_tsv, sep="\t")
-                            df = df[~df['Scientific_name'].str.contains('Homo sapiens', case=False, na=False)]
+                            df = df[~df['Scientific_name'].str.contains('Homo sapiens', na=False)]
                             df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
                             ref_based(df, args.output_dir, args.input_dir, args.bowtie2_index, args.threads, rank)
                         if args.run_deno_ref:
                             deno_ref_based(merged_tsv, args.output_dir, args.input_dir, args.threads, rank)
     elif args.run_ref_base or args.run_deno_ref:
-        merged_tsv = args.filtered_tsv if args.filtered_tsv else merged_tsv_path
-        if os.path.isfile(merged_tsv):
+        merged_tsv_file = args.filtered_tsv if args.filtered_tsv else merged_tsv
+        if os.path.isfile(merged_tsv_file):
             if args.run_ref_base:
-                ref_based(pd.read_csv(merged_tsv, sep="\t"), args.output_dir, args.input_dir, args.bowtie2_index, args.threads, "S")
+                ref_based(pd.read_csv(merged_tsv_file, sep="\t"), args.output_dir, args.input_dir, args.bowtie2_index, args.threads, "S")
             if args.run_deno_ref:
-                deno_ref_based(merged_tsv, args.output_dir, args.input_dir, args.threads, "S")
+                deno_ref_based(merged_tsv_file, args.output_dir, args.input_dir, args.threads, "S")
 
 if __name__ == "__main__":
     main()
