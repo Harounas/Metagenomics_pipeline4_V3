@@ -33,7 +33,7 @@ def extract_long_contigs_kraken(base_contigs_dir, output_tsv="long_contigs_summa
     output_dir.mkdir(exist_ok=True)
 
     all_long_seqs = []
-    header = ["Sample_ID", "contig_id", "contig_length", "taxname"]
+    header = ["Sample_ID", "gene", "contig_length", "taxname"]
 
     with open(output_tsv, "w", newline="") as out_f:
         writer = csv.writer(out_f, delimiter="\t")
