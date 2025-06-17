@@ -225,7 +225,7 @@ def run_genomad(input_fasta: str, output_dir: str, genomad_db: str,
     "genomad", "end-to-end",
     input_fasta,
     str(out_dir),
-    "--database", genomad_db,
+    genomad_db,
     "--min-score", str(min_score),
     "--threads", str(threads)
 ]
