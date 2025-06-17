@@ -14,7 +14,7 @@ import sys
 import logging
 import subprocess
 import csv
-
+from Bio import SeqIO, Entrez
 from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
     process_sample,
     aggregate_kraken_results,
