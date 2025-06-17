@@ -1,403 +1,249 @@
 #!/usr/bin/env python3
 """
-extract_contigs_diamond.py
+run_metagenomics_pl2.py
 
-This script extracts viral contigs from Kraken2 results, merges & renames them,
-runs geNomad, clusters contigs, extracts long contigs from the clustered FASTA,
-and performs Diamond BLASTX with Entrez annotation.
+Metagenomics pipeline including Kraken2 classification, optional assembly‐based contig
+extraction & Diamond annotation, and downstream analyses.
 """
 
-from pathlib import Path
-import subprocess
+import os
+import glob
+import argparse
 import pandas as pd
-from Bio import SeqIO, Entrez
 import sys
+import logging
+import subprocess
 
-# Set your email for NCBI Entrez usage
-Entrez.email = "harounasoum17@gmail.com"
+from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
+    process_sample,
+    aggregate_kraken_results,
+    generate_abundance_plots,
+    run_multiqc,
+    process_kraken_reports,
+    generate_unfiltered_merged_tsv,
+    process_all_ranks,
+    process_output_reports
+)
+from Metagenomics_pipeline4_V2.ref_based_assembly import ref_based
+from Metagenomics_pipeline4_V2.deno_ref_assembly2 import deno_ref_based
 
+from Metagenomics_pipeline4_V2 import extract_contigs_diamond  # contig extraction & Diamond annotation
 
-import csv
-from Bio import SeqIO
-from Bio.SeqRecord import SeqRecord
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("metagenomics_pipeline.log"),
+        logging.StreamHandler()
+    ]
+)
 
-def extract_long_contigs_kraken(base_contigs_dir, output_tsv="long_contigs_summary.tsv") -> Path:
-    """
-    Extract viral contigs with length ≥500 bp from Kraken2 output.
-    """
-    from Bio import SeqIO
+def create_sample_id_df(input_dir):
+    sample_ids = []
+    for f in glob.glob(os.path.join(input_dir, "*_R1*.fastq*")):
+        sid = os.path.basename(f)
+        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz",
+                    "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
+            sid = sid.replace(pat, "")
+        sample_ids.append(sid)
+    return pd.DataFrame(sample_ids, columns=["Sample_IDs"])
 
-    allowed_ranks = {"F", "F1", "F2", "G", "G1", "G2", "S", "S1", "S2"}
-    base_dir = Path(base_contigs_dir)
-    output_dir = base_dir / "long_contigs"
-    output_dir.mkdir(exist_ok=True)
+def validate_inputs(args):
+    if not os.path.isdir(args.input_dir):
+        logging.error(f"Input directory '{args.input_dir}' not found.")
+        sys.exit(1)
+    if not os.path.isdir(args.kraken_db):
+        logging.error(f"Kraken DB '{args.kraken_db}' not found.")
+        sys.exit(1)
+    if args.bowtie2_index and not os.path.exists(args.bowtie2_index + ".1.bt2"):
+        logging.error(f"Bowtie2 index '{args.bowtie2_index}' not found.")
+        sys.exit(1)
+    if args.metadata_file and not os.path.isfile(args.metadata_file):
+        logging.error(f"Metadata file '{args.metadata_file}' not found.")
+        sys.exit(1)
+    if args.use_precomputed_reports and not glob.glob(os.path.join(args.output_dir, "*_report.txt")):
+        logging.error("No precomputed Kraken reports found in output directory")
+        sys.exit(1)
 
-    all_long_seqs = []
-    header = ["Sample_ID", "contig_id", "contig_length", "taxname"]
-
-    with open(output_tsv, "w", newline="") as out_f:
-        writer = csv.writer(out_f, delimiter="\t")
-        writer.writerow(header)
-
-        for report in base_dir.glob("*_Viruses_kraken_report.txt"):
-            sample_id = report.stem.replace("_Viruses_kraken_report", "")
-            kout = base_dir / f"{sample_id}_kraken2_output.txt"
-            contigs_fa = base_dir / sample_id / "contigs.fasta"
-
-            if not (report.exists() and kout.exists() and contigs_fa.exists()):
-                print(f"Skipping {sample_id}: missing files.")
+def process_samples(args):
+    run_bowtie = not args.no_bowtie2 and args.bowtie2_index is not None
+    for forward in glob.glob(os.path.join(args.input_dir, "*_R1*.fastq*")):
+        base = os.path.basename(forward)
+        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz",
+                    "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
+            base = base.replace(pat, "")
+        reverse = None
+        if not args.use_assembly or args.paired_assembly:
+            candidates = [
+                os.path.join(args.input_dir, f"{base}_R2_001.fastq.gz"),
+                os.path.join(args.input_dir, f"{base}_R2.fastq.gz"),
+                os.path.join(args.input_dir, f"{base}_R2.fastq")
+            ]
+            reverse = next((r for r in candidates if os.path.isfile(r)), None)
+            if not reverse and not args.use_assembly:
+                logging.warning(f"No R2 found for {base}, skipping.")
                 continue
 
-            # 1. Build taxid → virus name map
-            taxon_map = {}
-            with open(report) as rf:
-                reader = csv.reader(rf, delimiter="\t")
-                for row in reader:
-                    if len(row) < 6 or row[3].strip() not in allowed_ranks:
-                        continue
-                    taxid = row[4].strip()
-                    name = row[5].strip().replace(" ", "_")
-                    if any(tok in name.lower() for tok in ("virus", "virinae", "viridae")):
-                        taxon_map[taxid] = name
+        logging.info(f"Processing sample {base} (assembly={args.use_assembly})")
+        process_sample(
+            forward=forward,
+            reverse=reverse,
+            base_name=base,
+            bowtie2_index=args.bowtie2_index,
+            kraken_db=args.kraken_db,
+            output_dir=args.output_dir,
+            threads=args.threads,
+            run_bowtie=run_bowtie,
+            use_precomputed_reports=args.use_precomputed_reports,
+            use_assembly=args.use_assembly,
+            skip_preprocessing=args.skip_preprocessing,
+            skip_existing=args.skip_existing
+        )
 
-            if not taxon_map:
-                continue
+def handle_metadata(args):
+    if args.no_metadata:
+        df = create_sample_id_df(args.input_dir)
+        df.to_csv(os.path.join(args.output_dir, "sample_ids.csv"), index=False)
+        return aggregate_kraken_results(
+            args.output_dir,
+            sample_id_df=df,
+            read_count=args.read_count,
+            max_read_count=args.max_read_count
+        )
+    return aggregate_kraken_results(
+        args.output_dir,
+        metadata_file=args.metadata_file,
+        read_count=args.read_count,
+        max_read_count=args.max_read_count
+    )
 
-            # 2. Map taxid → list of contig IDs
-            contig_hits = {}
-            with open(kout) as kf:
-                reader = csv.reader(kf, delimiter="\t")
-                for row in reader:
-                    if len(row) < 3:
-                        continue
-                    cid, info = row[1].strip(), row[2]
-                    for tid in taxon_map:
-                        if f"taxid {tid}" in info:
-                            contig_hits.setdefault(tid, []).append(cid)
+def main():
+    parser = argparse.ArgumentParser(
+        description="Metagenomics pipeline for taxonomic classification and analysis"
+    )
+    parser.add_argument("--kraken_db", required=True)
+    parser.add_argument("--output_dir", required=True)
+    parser.add_argument("--input_dir", required=True)
+    parser.add_argument("--bowtie2_index")
+    parser.add_argument("--threads", type=int, default=8)
+    parser.add_argument(
+        "--diamond_db",
+        default="/home/soumareh/mnt/nrdb/nr",
+        help="Path to the Diamond-formatted NR database"
+    )
+    parser.add_argument("--diamond", action="store_true", help="Enable contig extraction and Diamond annotation")
+    parser.add_argument("--metadata_file")
+    parser.add_argument("--read_count", type=int, default=1)
+    parser.add_argument("--top_N", type=int, default=10000)
+    parser.add_argument("--max_read_count", type=int, default=5000000000)
+    parser.add_argument("--no_bowtie2", action="store_true")
+    parser.add_argument("--no_metadata", action="store_true")
+    parser.add_argument("--use_precomputed_reports", action="store_true")
+    parser.add_argument("--use_assembly", action="store_true")
+    parser.add_argument("--paired_assembly", action="store_true")
+    parser.add_argument("--skip_preprocessing", action="store_true")
+    parser.add_argument("--bacteria", action="store_true")
+    parser.add_argument("--virus", action="store_true")
+    parser.add_argument("--archaea", action="store_true")
+    parser.add_argument("--eukaryota", action="store_true")
+    parser.add_argument("--run_ref_base", action="store_true")
+    parser.add_argument("--run_deno_ref", action="store_true")
+    parser.add_argument("--skip_multiqc", action="store_true")
+    parser.add_argument("--skip_reports", action="store_true")
+    parser.add_argument("--filtered_tsv")
+    parser.add_argument("--skip_existing", action="store_true")
+    parser.add_argument("--process_all_ranks", action="store_true")
+    parser.add_argument("--col_filter", type=str, nargs="+")
+    parser.add_argument("--pat_to_keep", type=str, nargs="+")
 
-            if not contig_hits:
-                continue
+    args = parser.parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
+    validate_inputs(args)
 
-            contig_dict = {rec.id: rec for rec in SeqIO.parse(str(contigs_fa), "fasta")}
+    process_samples(args)
+    merged_tsv = handle_metadata(args)
 
-            for taxid, contig_ids in contig_hits.items():
-                taxname = taxon_map[taxid]
-                for cid in contig_ids:
-                    if cid in contig_dict:
-                        rec = contig_dict[cid]
-                        if len(rec.seq) >= 500:
-                            new_id = f"{sample_id}_{cid}"
-                            new_rec = SeqRecord(rec.seq, id=new_id, description="")
-                            all_long_seqs.append(new_rec)
-                            writer.writerow([sample_id, cid, len(rec.seq), taxname])
+    if not args.skip_reports:
+        logging.info("Processing Kraken reports…")
+        process_kraken_reports(args.output_dir)
+        logging.info("Processing output reports…")
+        process_output_reports(args.output_dir)
 
-    output_fasta = output_dir / "all_long_contigs_renamed.fasta"
-    with open(output_fasta, "w") as fasta_out:
-        SeqIO.write(all_long_seqs, fasta_out, "fasta")
+    # Assembly‐based contig extraction & Diamond annotation
+    if args.use_assembly and args.diamond:
+        logging.info("Running contig extraction and Diamond annotation…")
 
-    print(f"✅ Merged long Kraken contigs saved to: {output_fasta}")
-    return output_fasta
+        long_contig_fasta = extract_contigs_diamond.extract_long_contigs_kraken(
+            base_contigs_dir=args.output_dir,
+            output_tsv=os.path.join(args.output_dir, "long_contigs_summary.tsv")
+        )
 
-# Example usage
-#extract_long_contigs(".", output_tsv="long_contigs_summary.tsv")
+        extract_contigs_diamond.run_diamond(
+            diamond_db=args.diamond_db,
+            query_file=str(long_contig_fasta),
+            output_file=os.path.join(args.output_dir, "results.m8"),
+            threads=args.threads
+        )
 
+        extract_contigs_diamond.process_diamond_results(
+            results_file=os.path.join(args.output_dir, "results.m8"),
+            out_csv=os.path.join(args.output_dir, "extracted_virus.csv"),
+            sorted_csv=os.path.join(args.output_dir, "extracted_virus_sorted.csv")
+        )
 
-def extract_short_contigs_kraken(base_contigs_dir, output_tsv="short_contigs_summary.tsv"):
-    """
-    For each sample and each virus taxon:
-      - find all contigs assigned by Kraken2
-      - compute each contig’s length from contigs.fasta
-      - if the largest contig length < 500 bp, emit all contigs for that virus
-        into a TSV [sample_id, contig_id, contig_length, virus_name]
-    Expects files under base_contigs_dir:
-      - {sample_id}_Viruses_kraken_report.txt
-      - {sample_id}_kraken2_output.txt
-      - {sample_id}/contigs.fasta
-    """
-    allowed_ranks = {"F", "F1", "F2", "G", "G1", "G2", "S", "S1", "S2"}
-    base_dir = Path(base_contigs_dir)
-    header = ["Sample_ID", "gene", "contig_length", "taxname"]
-    
-    with open(output_tsv, "w", newline="") as out_f:
-        writer = csv.writer(out_f, delimiter="\t")
-        writer.writerow(header)
+        logging.info("Contig extraction and Diamond steps complete.")
+    elif args.use_assembly and not args.diamond:
+        logging.info("Assembly was enabled, but Diamond annotation was skipped (--diamond not provided).")
 
-        # iterate through each sample’s virus-only Kraken report
-        for report in base_dir.glob("*_Viruses_kraken_report.txt"):
-            sample_id = report.stem.replace("_Viruses_kraken_report", "")
-            kout = base_dir / f"{sample_id}_kraken2_output.txt"
-            contigs_fa = base_dir / sample_id / "contigs.fasta"
+    if not args.skip_multiqc:
+        run_multiqc(args.output_dir)
 
-            # skip if any required file is missing
-            if not (report.exists() and kout.exists() and contigs_fa.exists()):
-                print(f"Skipping {sample_id}: missing files.")
-                continue
-
-            # 1) build taxon_id → virus_name map
-            taxon_map = {}
-            with open(report) as rf:
-                reader = csv.reader(rf, delimiter="\t")
-                for row in reader:
-                    if len(row) < 6 or row[3] not in allowed_ranks:
-                        continue
-                    taxid = row[4].strip()
-                    name = row[5].strip().replace(" ", "_")
-                    if any(tok in name.lower() for tok in ("virus","virinae","viridae")):
-                        taxon_map[taxid] = name
-
-            if not taxon_map:
-                continue
-
-            # 2) build taxon_id → list of contig IDs from Kraken2 output
-            contig_hits = {}
-            with open(kout) as kf:
-                reader = csv.reader(kf, delimiter="\t")
-                for row in reader:
-                    if len(row) < 3:
-                        continue
-                    cid, info = row[1].strip(), row[2]
-                    for tid in taxon_map:
-                        if f"taxid {tid}" in info:
-                            contig_hits.setdefault(tid, []).append(cid)
-
-            if not contig_hits:
-                continue
-
-            # 3) parse contigs.fasta once into a dict of lengths
-            length_map = {rec.id: len(rec.seq) 
-                          for rec in SeqIO.parse(str(contigs_fa), "fasta")}
-
-
-            # 4) for each virus, check max length < 500
-            for tid, cids in contig_hits.items():
-                lengths = [length_map.get(cid, 0) for cid in cids]
-                if not lengths:
-                    continue
-                if max(lengths) < 500:
-                    vname = taxon_map[tid]
-                    for cid, clen in zip(cids, lengths):
-                        writer.writerow([sample_id, cid, clen, vname])
-                    print(f"{sample_id} • {vname}: all contigs ≤ {max(lengths)} bp")
-
-    print(f"\nDone! Summary written to {output_tsv}")
-
-#extract_short_contigs(".")
-
-
-def extract_and_merge_contigs_genomad(base_contigs_dir: str,
-                              output_fasta: str = "merged_contigs_genomad.fasta",
-                              min_length: int = 200) -> None:
-
-    #Extracts contigs > min_length bp from each sample's contigs.fasta
-    #under base_contigs_dir and merges them into a single FASTA.
-
-    base_dir = Path(base_contigs_dir)
-    merged_records = []
-
-    for contigs_file in base_dir.glob("*/contigs.fasta"):
-        sample_id = contigs_file.parent.name
-        print(f"Processing sample: {sample_id}")
-        for rec in SeqIO.parse(contigs_file, "fasta"):
-            if len(rec.seq) > min_length:
-                rec.id = f"{sample_id}|{rec.id}"
-                rec.description = ""
-                merged_records.append(rec)
-
-    if merged_records:
-        SeqIO.write(merged_records, output_fasta, "fasta")
-        print(f"✅ Merged {len(merged_records)} contigs >{min_length} bp into {output_fasta}")
+    if args.no_metadata:
+        sample_id_df = create_sample_id_df(args.input_dir)
     else:
-        print(f"⚠️ No contigs found >{min_length} bp in any sample.")
+        sample_id_df = None
 
+    if not args.skip_reports:
+        domains = ["Bacteria", "Viruses", "Archaea", "Eukaryota"]
+        domain_flags = [args.bacteria, args.virus, args.archaea, args.eukaryota]
+        domain_rank_codes = {
+            "Bacteria": ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
+            "Viruses":  ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
+            "Archaea":  ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
+            "Eukaryota":['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3']
+        }
 
+        for domain, flag in zip(domains, domain_flags):
+            if flag:
+                for rank in domain_rank_codes[domain]:
+                    merged_tsv = aggregate_kraken_results(
+                        args.output_dir,
+                        args.metadata_file,
+                        sample_id_df,
+                        {domain: args.read_count},
+                        {domain: args.max_read_count},
+                        rank,
+                        domain
+                    )
+                    if args.filtered_tsv and os.path.isfile(args.filtered_tsv):
+                        merged_tsv = args.filtered_tsv
+                    if merged_tsv and os.path.isfile(merged_tsv):
+                        generate_abundance_plots(merged_tsv, args.top_N, args.col_filter, args.pat_to_keep, rank)
+                        if args.run_ref_base:
+                            df = pd.read_csv(merged_tsv, sep="\t")
+                            df = df[~df['Scientific_name'].str.contains('Homo sapiens', na=False)]
+                            df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+                            ref_based(df, args.output_dir, args.input_dir, args.bowtie2_index, args.threads, rank)
+                        if args.run_deno_ref:
+                            deno_ref_based(merged_tsv, args.output_dir, args.input_dir, args.threads, rank)
+    elif args.run_ref_base or args.run_deno_ref:
+        merged_tsv_file = args.filtered_tsv if args.filtered_tsv else merged_tsv
+        if os.path.isfile(merged_tsv_file):
+            if args.run_ref_base:
+                ref_based(pd.read_csv(merged_tsv_file, sep="\t"), args.output_dir, args.input_dir, args.bowtie2_index, args.threads, "S")
+            if args.run_deno_ref:
+                deno_ref_based(merged_tsv_file, args.output_dir, args.input_dir, args.threads, "S")
 
-
-
-def run_genomad(input_fasta: str, output_dir: str, genomad_db: str,
-                min_score: float = 0.5, threads: int = 8) -> Path:
-    """
-    Runs geNomad end-to-end pipeline to identify viral contigs.
-    """
-    out_dir = Path(output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    genomad_cmd = [
-        "genomad", "end-to-end",
-        input_fasta,
-        str(out_dir),
-        "--db-dir", genomad_db,
-        "--min-score", str(min_score),
-        "--threads", str(threads)
-    ]
-    print("🚀 Running geNomad:\n", " ".join(genomad_cmd))
-    subprocess.run(genomad_cmd, check=True)
-
-    virus_fasta = out_dir / "merged_contigs_filtered_summary" / "merged_contigs_virus.fna"
-    if not virus_fasta.exists():
-        raise FileNotFoundError(f"Viral contigs FASTA not found: {virus_fasta}")
-
-    return virus_fasta
-
-
-def filter_and_merge(fasta_paths, min_length, output_path):
-    seen_ids = set()
-    records_to_write = []
-
-    for fasta in fasta_paths:
-        for rec in SeqIO.parse(str(fasta), "fasta"):
-            if len(rec.seq) >= min_length:
-                if rec.id not in seen_ids:
-                    seen_ids.add(rec.id)
-                    records_to_write.append(rec)
-
-    SeqIO.write(records_to_write, output_path, "fasta")
-    print(f"✅ Wrote {len(records_to_write)} contigs ≥{min_length} bp to {output_path}")
-
-def cluster_contigs(virus_fasta: Path, output_dir: str, final_output: str = "clustered_contigs.fasta",
-                    identity: float = 0.95, word_size: int = 10,
-                    mem_mb: int = 16000, threads: int = 8) -> Path:
-    out_dir = Path(output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    clustered_fasta = out_dir / final_output
-    cdhit_cmd = [
-        "cd-hit-est",
-        "-i", str(virus_fasta),
-        "-o", str(clustered_fasta),
-        "-c", str(identity),
-        "-n", str(word_size),
-        "-d", "0",
-        "-M", str(mem_mb),
-        "-T", str(threads)
-    ]
-    print("🚀 Running cd-hit-est:\n", " ".join(cdhit_cmd))
-    subprocess.run(cdhit_cmd, check=True)
-
-    return clustered_fasta
-"""
-def run_genomad_and_cluster(input_fasta: str,
-                            output_dir: str,
-                            genomad_db: str,
-                            final_output: str = "clustered_contigs.fasta",
-                            min_score: float = 0.5,
-                            identity: float = 0.95,
-                            word_size: int = 10,
-                            mem_mb: int = 16000,
-                            threads: int = 8) -> None:
-    
-    #Runs geNomad to identify viral contigs, then clusters those contigs
-    #using CD-HIT-EST. Produces a clustered FASTA at output_dir/final_output.
-    
-    out_dir = Path(output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # geNomad end-to-end
-    genomad_cmd = [
-        "genomad", "end-to-end",
-        input_fasta,
-        str(out_dir),
-        "--db-dir", genomad_db,
-        "--min-score", str(min_score),
-        "--threads", str(threads)
-    ]
-    print("🚀 Running geNomad:\n", " ".join(genomad_cmd))
-    subprocess.run(genomad_cmd, check=True)
-
-    # Locate filtered viral contigs
-    virus_fasta = out_dir / "merged_contigs_filtered_summary" / "merged_contigs_virus.fna"
-    if not virus_fasta.exists():
-        raise FileNotFoundError(f"Viral contigs FASTA not found: {virus_fasta}")
-
-    # Cluster with CD-HIT-EST
-    clustered_fasta = out_dir / final_output
-    cdhit_cmd = [
-        "cd-hit-est",
-        "-i", str(virus_fasta),
-        "-o", str(clustered_fasta),
-        "-c", str(identity),
-        "-n", str(word_size),
-        "-d", "0",
-        "-M", str(mem_mb),
-        "-T", str(threads)
-    ]
-    print("🚀 Running cd-hit-est:\n", " ".join(cdhit_cmd))
-    subprocess.run(cdhit_cmd, check=True)
-
-    print(f"\n✅ Pipeline complete! Final clustered FASTA: {clustered_fasta}")
-
-"""
-
-def extract_long_contigs(input_fasta: str,
-                          output_fasta: str,
-                          min_length: int = 500) -> None:
-    """
-    Extracts contigs longer than min_length from the clustered contigs FASTA
-    produced by run_genomad_and_cluster. Writes output to output_fasta.
-    """
-    records = []
-    for rec in SeqIO.parse(input_fasta, "fasta"):
-        if len(rec.seq) > min_length:
-            records.append(rec)
-
-    if records:
-        SeqIO.write(records, output_fasta, "fasta")
-        print(f"✅ Extraction complete: {len(records)} contigs >{min_length} bp written to {output_fasta}")
-    else:
-        print(f"⚠️ No contigs >{min_length} bp in {input_fasta}")
-
-
-
-def run_diamond(diamond_db: str,
-                query_file: str,
-                output_file: str = "results.m8",
-                threads: int = 8) -> None:
-    """
-    Runs Diamond BLASTX of query_file against diamond_db.
-    """
-    cmd = [
-        "diamond", "blastx",
-        "--query", query_file,
-        "--db", diamond_db,
-        "--out", output_file,
-        "--threads", str(threads),
-        "--outfmt", "6"  # tabular
-    ]
-    print("\n🚀 Executing Diamond BLASTX:\n", " ".join(cmd))
-    subprocess.run(cmd, check=True)
-    print(f"✅ Diamond results written to {output_file}")
-
-def process_diamond_results(results_file: str = "results.m8",
-                            out_csv: str = "extracted_virus.csv",
-                            sorted_csv: str = "extracted_virus_sorted.csv") -> None:
-    """
-    Parses Diamond BLASTX output, annotates via Entrez, computes a custom score,
-    and writes both raw and sorted CSV results.
-    """
-    df = pd.read_csv(results_file, sep="\t", header=None, names=[
-        'query_id','subject_id','pident','aln_len',
-        'mismatches','gaps','qstart','qend','sstart','send',
-        'evalue','bitscore'
-    ])
-
-    def fetch_name(acc: str) -> str:
-        try:
-            handle = Entrez.efetch(db="protein", id=acc, rettype="gb", retmode="text")
-            txt = handle.read()
-            handle.close()
-            for line in txt.splitlines():
-                if line.startswith("  ORGANISM"):
-                    return line.split("ORGANISM")[-1].strip()
-        except Exception:
-            return "Unknown"
-        return "Unknown"
-
-    print("🔍 Annotating subject IDs via Entrez...")
-    df['Virus Name'] = df['subject_id'].apply(fetch_name)
-    df.to_csv(out_csv, index=False)
-
-    df['Custom_Score'] = (df.pident * df.aln_len) / (1 + df.mismatches + df.gaps)
-    df = df.sort_values('Custom_Score', ascending=False)
-    df.to_csv(sorted_csv, index=False)
-
-    print(f"✅ Annotated Diamond output → {out_csv}")
-    print(f"✅ Sorted results → {sorted_csv}")
+if __name__ == "__main__":
+    main()
