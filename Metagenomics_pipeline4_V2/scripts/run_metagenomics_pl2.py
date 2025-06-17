@@ -2,8 +2,8 @@
 """
 run_metagenomics_pl2.py
 
-Metagenomics pipeline including Kraken2 classification, optional assembly‐based contig
-extraction & Diamond annotation, and downstream analyses.
+Metagenomics pipeline including Kraken2 classification, optional assembly-based contig
+extraction, geNomad detection, clustering, and Diamond annotation with downstream analyses.
 """
 
 import os
@@ -26,10 +26,8 @@ from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
 )
 from Metagenomics_pipeline4_V2.ref_based_assembly import ref_based
 from Metagenomics_pipeline4_V2.deno_ref_assembly2 import deno_ref_based
+from Metagenomics_pipeline4_V2 import extract_contigs_diamond
 
-from Metagenomics_pipeline4_V2 import extract_contigs_diamond  # contig extraction & Diamond annotation
-
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -64,6 +62,9 @@ def validate_inputs(args):
         sys.exit(1)
     if args.use_precomputed_reports and not glob.glob(os.path.join(args.output_dir, "*_report.txt")):
         logging.error("No precomputed Kraken reports found in output directory")
+        sys.exit(1)
+    if args.run_genomad and not args.genomad_db:
+        logging.error("You must provide --genomad_db when using --run_genomad")
         sys.exit(1)
 
 def process_samples(args):
@@ -127,12 +128,8 @@ def main():
     parser.add_argument("--input_dir", required=True)
     parser.add_argument("--bowtie2_index")
     parser.add_argument("--threads", type=int, default=8)
-    parser.add_argument(
-        "--diamond_db",
-        default="/home/soumareh/mnt/nrdb/nr",
-        help="Path to the Diamond-formatted NR database"
-    )
-    parser.add_argument("--diamond", action="store_true", help="Enable contig extraction and Diamond annotation")
+    parser.add_argument("--diamond_db", default="/home/soumareh/mnt/nrdb/nr")
+    parser.add_argument("--diamond", action="store_true")
     parser.add_argument("--metadata_file")
     parser.add_argument("--read_count", type=int, default=1)
     parser.add_argument("--top_N", type=int, default=10000)
@@ -156,6 +153,8 @@ def main():
     parser.add_argument("--process_all_ranks", action="store_true")
     parser.add_argument("--col_filter", type=str, nargs="+")
     parser.add_argument("--pat_to_keep", type=str, nargs="+")
+    parser.add_argument("--run_genomad", action="store_true")
+    parser.add_argument("--genomad_db", type=str, help="Path to geNomad database")
 
     args = parser.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
@@ -170,31 +169,66 @@ def main():
         logging.info("Processing output reports…")
         process_output_reports(args.output_dir)
 
-    # Assembly‐based contig extraction & Diamond annotation
     if args.use_assembly and args.diamond:
         logging.info("Running contig extraction and Diamond annotation…")
-
-        long_contig_fasta = extract_contigs_diamond.extract_long_contigs_kraken(
+        long_contigs_fasta = extract_contigs_diamond.extract_long_contigs_kraken(
             base_contigs_dir=args.output_dir,
             output_tsv=os.path.join(args.output_dir, "long_contigs_summary.tsv")
         )
 
-        extract_contigs_diamond.run_diamond(
-            diamond_db=args.diamond_db,
-            query_file=str(long_contig_fasta),
-            output_file=os.path.join(args.output_dir, "results.m8"),
-            threads=args.threads
-        )
+        if args.run_genomad:
+            genomad_input_fasta = os.path.join(args.output_dir, "merged_contigs_genomad.fasta")
+            genomad_out_dir = os.path.join(args.output_dir, "genomad_output")
+            clustered_out_dir = os.path.join(args.output_dir, "clustered_output")
+            final_long_clustered_fasta = os.path.join(args.output_dir, "clustered_long_contigs.fasta")
 
-        extract_contigs_diamond.process_diamond_results(
-            results_file=os.path.join(args.output_dir, "results.m8"),
-            out_csv=os.path.join(args.output_dir, "extracted_virus.csv"),
-            sorted_csv=os.path.join(args.output_dir, "extracted_virus_sorted.csv")
-        )
+            extract_contigs_diamond.extract_and_merge_contigs_genomad(
+                base_contigs_dir=args.output_dir,
+                output_fasta=genomad_input_fasta
+            )
 
-        logging.info("Contig extraction and Diamond steps complete.")
-    elif args.use_assembly and not args.diamond:
-        logging.info("Assembly was enabled, but Diamond annotation was skipped (--diamond not provided).")
+            virus_fasta = extract_contigs_diamond.run_genomad(
+                input_fasta=genomad_input_fasta,
+                output_dir=genomad_out_dir,
+                genomad_db=args.genomad_db,
+                threads=args.threads
+            )
+
+            clustered_fasta = extract_contigs_diamond.cluster_contigs(
+                virus_fasta=virus_fasta,
+                output_dir=clustered_out_dir,
+                threads=args.threads
+            )
+
+            extract_contigs_diamond.extract_long_contigs(
+                input_fasta=clustered_fasta,
+                output_fasta=final_long_clustered_fasta
+            )
+
+            extract_contigs_diamond.run_diamond(
+                diamond_db=args.diamond_db,
+                query_file=final_long_clustered_fasta,
+                output_file=os.path.join(args.output_dir, "results_clustered.m8"),
+                threads=args.threads
+            )
+
+            extract_contigs_diamond.process_diamond_results(
+                results_file=os.path.join(args.output_dir, "results_clustered.m8"),
+                out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
+                sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
+            )
+        else:
+            extract_contigs_diamond.run_diamond(
+                diamond_db=args.diamond_db,
+                query_file=str(long_contigs_fasta),
+                output_file=os.path.join(args.output_dir, "results.m8"),
+                threads=args.threads
+            )
+            extract_contigs_diamond.process_diamond_results(
+                results_file=os.path.join(args.output_dir, "results.m8"),
+                out_csv=os.path.join(args.output_dir, "extracted_virus.csv"),
+                sorted_csv=os.path.join(args.output_dir, "extracted_virus_sorted.csv")
+            )
 
     if not args.skip_multiqc:
         run_multiqc(args.output_dir)
@@ -208,10 +242,10 @@ def main():
         domains = ["Bacteria", "Viruses", "Archaea", "Eukaryota"]
         domain_flags = [args.bacteria, args.virus, args.archaea, args.eukaryota]
         domain_rank_codes = {
-            "Bacteria": ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
-            "Viruses":  ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
-            "Archaea":  ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
-            "Eukaryota":['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3']
+            "Bacteria":  ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
+            "Viruses":   ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
+            "Archaea":   ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
+            "Eukaryota": ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3']
         }
 
         for domain, flag in zip(domains, domain_flags):
