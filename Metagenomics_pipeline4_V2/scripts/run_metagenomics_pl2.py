@@ -181,14 +181,43 @@ def main():
             genomad_out_dir = os.path.join(args.output_dir, "genomad_output")
             clustered_out_dir = os.path.join(args.output_dir, "clustered_output")
             final_long_clustered_fasta = os.path.join(args.output_dir, "clustered_long_contigs.fasta")
+            short_contigs_tsv = os.path.join(args.output_dir, "short_contigs_summary.tsv")
+            short_contigs_fasta = os.path.join(args.output_dir, "short_contigs.fasta")
+            merged_combined_fasta = os.path.join(args.output_dir, "combined_contigs_for_genomad.fasta")
 
             extract_contigs_diamond.extract_and_merge_contigs_genomad(
                 base_contigs_dir=args.output_dir,
                 output_fasta=genomad_input_fasta
             )
 
+            extract_contigs_diamond.extract_short_contigs_kraken(
+                base_contigs_dir=args.output_dir,
+                output_tsv=short_contigs_tsv
+            )
+
+            short_contigs_records = []
+            with open(short_contigs_tsv) as tsv_file:
+                reader = csv.DictReader(tsv_file, delimiter="\t")
+                for row in reader:
+                    sample_id, gene_id, taxname = row['Sample_ID'], row['gene'], row['taxname']
+                    contig_path = os.path.join(args.output_dir, sample_id, "contigs.fasta")
+                    if os.path.exists(contig_path):
+                        for rec in SeqIO.parse(contig_path, "fasta"):
+                            if rec.id == gene_id:
+                                rec.id = f"{sample_id}|{gene_id}|{taxname}"
+                                rec.description = ""
+                                short_contigs_records.append(rec)
+                                break
+            SeqIO.write(short_contigs_records, short_contigs_fasta, "fasta")
+
+            extract_contigs_diamond.filter_and_merge(
+                fasta_paths=[genomad_input_fasta, short_contigs_fasta],
+                min_length=200,
+                output_path=merged_combined_fasta
+            )
+
             virus_fasta = extract_contigs_diamond.run_genomad(
-                input_fasta=genomad_input_fasta,
+                input_fasta=merged_combined_fasta,
                 output_dir=genomad_out_dir,
                 genomad_db=args.genomad_db,
                 threads=args.threads
@@ -216,18 +245,6 @@ def main():
                 results_file=os.path.join(args.output_dir, "results_clustered.m8"),
                 out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
                 sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
-            )
-        else:
-            extract_contigs_diamond.run_diamond(
-                diamond_db=args.diamond_db,
-                query_file=str(long_contigs_fasta),
-                output_file=os.path.join(args.output_dir, "results.m8"),
-                threads=args.threads
-            )
-            extract_contigs_diamond.process_diamond_results(
-                results_file=os.path.join(args.output_dir, "results.m8"),
-                out_csv=os.path.join(args.output_dir, "extracted_virus.csv"),
-                sorted_csv=os.path.join(args.output_dir, "extracted_virus_sorted.csv")
             )
 
     if not args.skip_multiqc:
