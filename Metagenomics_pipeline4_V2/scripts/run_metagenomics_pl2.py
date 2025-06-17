@@ -1,3 +1,5 @@
+
+
 #!/usr/bin/env python3
 """
 run_metagenomics_pl2.py
@@ -182,8 +184,8 @@ def main():
             genomad_out_dir = os.path.join(args.output_dir, "genomad_output")
             clustered_out_dir = os.path.join(args.output_dir, "clustered_output")
             final_long_clustered_fasta = os.path.join(args.output_dir, "clustered_long_contigs.fasta")
-            short_contigs_tsv = os.path.join(args.output_dir, "short_contigs_summary.tsv")
-            short_contigs_fasta = os.path.join(args.output_dir, "short_contigs.fasta")
+            long_contigs_tsv = os.path.join(args.output_dir, "long_contigs_summary.tsv")
+            long_contigs_fasta = os.path.join(args.output_dir, "long_contigs.fasta")
             merged_combined_fasta = os.path.join(args.output_dir, "combined_contigs_for_genomad.fasta")
 
             extract_contigs_diamond.extract_and_merge_contigs_genomad(
@@ -191,13 +193,13 @@ def main():
                 output_fasta=genomad_input_fasta
             )
 
-            extract_contigs_diamond.extract_short_contigs_kraken(
+            extract_contigs_diamond.extract_long_contigs_kraken(
                 base_contigs_dir=args.output_dir,
-                output_tsv=short_contigs_tsv
+                output_tsv=long_contigs_tsv
             )
 
-            short_contigs_records = []
-            with open(short_contigs_tsv) as tsv_file:
+            long_contigs_records = []
+            with open(long_contigs_tsv) as tsv_file:
                 reader = csv.DictReader(tsv_file, delimiter="\t")
                 for row in reader:
                     sample_id, gene_id, taxname = row['Sample_ID'], row['gene'], row['taxname']
@@ -207,12 +209,12 @@ def main():
                             if rec.id == gene_id:
                                 rec.id = f"{sample_id}|{gene_id}|{taxname}"
                                 rec.description = ""
-                                short_contigs_records.append(rec)
+                                long_contigs_records.append(rec)
                                 break
-            SeqIO.write(short_contigs_records, short_contigs_fasta, "fasta")
+            SeqIO.write(long_contigs_records, long_contigs_fasta, "fasta")
 
             extract_contigs_diamond.filter_and_merge(
-                fasta_paths=[genomad_input_fasta, short_contigs_fasta],
+                fasta_paths=[genomad_input_fasta, long_contigs_fasta],
                 min_length=200,
                 output_path=merged_combined_fasta
             )
