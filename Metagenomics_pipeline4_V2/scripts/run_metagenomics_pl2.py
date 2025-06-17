@@ -13,6 +13,7 @@ import pandas as pd
 import sys
 import logging
 import subprocess
+import csv
 
 from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
     process_sample,
