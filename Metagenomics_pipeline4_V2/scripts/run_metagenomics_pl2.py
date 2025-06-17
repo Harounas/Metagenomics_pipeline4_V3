@@ -224,11 +224,12 @@ def main():
                 threads=args.threads
             )
 
-            clustered_fasta = extract_contigs_diamond.cluster_contigs(
-                virus_fasta=virus_fasta,
+             clustered_fasta = extract_contigs_diamond.cluster_contigs(
+                virus_fasta=merged_combined_fasta,  # <-- updated from virus_fasta to merged_combined_fasta
                 output_dir=clustered_out_dir,
                 threads=args.threads
             )
+
 
             extract_contigs_diamond.extract_long_contigs(
                 input_fasta=clustered_fasta,
