@@ -85,7 +85,7 @@ def extract_long_contigs_kraken(base_contigs_dir, output_tsv="long_contigs_summa
                 for cid in contig_ids:
                     if cid in contig_dict:
                         rec = contig_dict[cid]
-                        if len(rec.seq) >= 500:
+                        if len(rec.seq) >= 400:
                             new_id = f"{sample_id}_{cid}"
                             new_rec = SeqRecord(rec.seq, id=new_id, description="")
                             all_long_seqs.append(new_rec)
