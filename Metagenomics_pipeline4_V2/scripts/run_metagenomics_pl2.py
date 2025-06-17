@@ -217,13 +217,15 @@ def main():
                 output_path=merged_combined_fasta
             )
 
+            # Run geNomad using genomad_input_fasta (from extract_and_merge_contigs_genomad)
             virus_fasta = extract_contigs_diamond.run_genomad(
-                input_fasta=merged_combined_fasta,
+                input_fasta=genomad_input_fasta,  # <-- corrected to use extract_and_merge_contigs_genomad output
                 output_dir=genomad_out_dir,
                 genomad_db=args.genomad_db,
                 threads=args.threads
             )
 
+            # Use merged_combined_fasta as input for clustering
             clustered_fasta = extract_contigs_diamond.cluster_contigs(
                 virus_fasta=merged_combined_fasta,  # <-- updated from virus_fasta to merged_combined_fasta
                 output_dir=clustered_out_dir,
