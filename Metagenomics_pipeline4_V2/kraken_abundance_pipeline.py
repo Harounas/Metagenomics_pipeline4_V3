@@ -306,7 +306,8 @@ def process_all_ranks(kraken_dir, metadata_file=None, sample_id_df=None,
 
 def run_multiqc(trimmomatic_output_dir):
     try:
-        subprocess.run(["multiqc", trimmomatic_output_dir], check=True)
+        subprocess.run(["multiqc", "--force", trimmomatic_output_dir], check=True)
         logging.info("MultiQC complete.")
     except Exception as e:
         logging.error(f"MultiQC error: {e}")
+
