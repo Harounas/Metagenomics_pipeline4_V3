@@ -367,7 +367,7 @@ def run_diamond(diamond_db: str,
     subprocess.run(cmd, check=True)
     print(f"✅ Diamond results written to {output_file}")
 
-def process_diafmond_results(results_file: str = "results.m8",
+def process_diamond_results(results_file: str = "results.m8",
                             out_csv: str = "extracted_virus.csv",
                             sorted_csv: str = "extracted_virus_sorted.csv") -> None:
     """
