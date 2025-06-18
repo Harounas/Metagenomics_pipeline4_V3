@@ -30,6 +30,7 @@ from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
 from Metagenomics_pipeline4_V2.ref_based_assembly import ref_based
 from Metagenomics_pipeline4_V2.deno_ref_assembly2 import deno_ref_based
 from Metagenomics_pipeline4_V2 import extract_contigs_diamond
+parser.add_argument("--nr_path", type=str, required=True, help="Path to nr FASTA file containing virus accession and name")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -254,12 +255,19 @@ def main():
                 output_file=os.path.join(args.output_dir, "results_clustered.m8"),
                 threads=args.threads
             )
+            # Post-process and annotate
+            processed_output = process_virus_contigs(
+            fasta_file=args.nr_path,
+            diamond_results_file=os.path.join(args.output_dir, "results_clustered.m8"),
+            output_dir=args.output_dir
+            )
 
             extract_contigs_diamond.process_diamond_results(
                 results_file=os.path.join(args.output_dir, "results_clustered.m8"),
                 out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
                 sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
             )
+            
 
     if not args.skip_multiqc:
         run_multiqc(args.output_dir)
