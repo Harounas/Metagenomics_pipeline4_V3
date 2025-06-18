@@ -330,7 +330,7 @@ def run_genomad_and_cluster(input_fasta: str,
 
 def extract_long_contigs(input_fasta: str,
                           output_fasta: str,
-                          min_length: int = 500) -> None:
+                          min_length: int = 400) -> None:
     """
     Extracts contigs longer than min_length from the clustered contigs FASTA
     produced by run_genomad_and_cluster. Writes output to output_fasta.
@@ -367,7 +367,7 @@ def run_diamond(diamond_db: str,
     subprocess.run(cmd, check=True)
     print(f"✅ Diamond results written to {output_file}")
 
-def process_diamond_results(results_file: str = "results.m8",
+def process_diafmond_results(results_file: str = "results.m8",
                             out_csv: str = "extracted_virus.csv",
                             sorted_csv: str = "extracted_virus_sorted.csv") -> None:
     """
