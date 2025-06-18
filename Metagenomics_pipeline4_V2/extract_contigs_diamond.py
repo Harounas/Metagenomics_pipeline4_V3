@@ -21,6 +21,7 @@ import csv
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
+
 def extract_long_contigs_kraken(base_contigs_dir, output_tsv="long_contigs_summary.tsv") -> Path:
     """
     Extract viral contigs with length ≥500 bp from Kraken2 output.
@@ -186,7 +187,7 @@ def extract_short_contigs_kraken(base_contigs_dir, output_tsv="short_contigs_sum
 
 def extract_and_merge_contigs_genomad(base_contigs_dir: str,
                               output_fasta: str = "merged_contigs_genomad.fasta",
-                              min_length: int = 200) -> None:
+                              min_length: int = 400) -> None:
 
     #Extracts contigs > min_length bp from each sample's contigs.fasta
     #under base_contigs_dir and merges them into a single FASTA.
