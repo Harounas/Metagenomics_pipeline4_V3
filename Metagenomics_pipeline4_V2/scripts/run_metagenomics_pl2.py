@@ -183,7 +183,7 @@ def main():
             output_tsv=os.path.join(args.output_dir, "long_contigs_summary.tsv")
         )
 
-        if args.run_genomad:
+        if args.run_genomad and not args.skip_genomad:
             genomad_input_fasta = os.path.join(args.output_dir, "merged_contigs_genomad.fasta")
             genomad_out_dir = os.path.join(args.output_dir, "genomad_output")
             clustered_out_dir = os.path.join(args.output_dir, "clustered_output")
@@ -251,26 +251,28 @@ def main():
                 input_fasta=clustered_fasta,
                 output_fasta=final_long_clustered_fasta
             )
-
-            extract_contigs_diamond.run_diamond(
+            if not args.skip_diamond:
+             extract_contigs_diamond.run_diamond(
                 diamond_db=args.diamond_db,
                 query_file=final_long_clustered_fasta,
                 output_file=os.path.join(args.output_dir, "results_clustered.m8"),
                 threads=args.threads
             )
             # Post-process and annotate
-            processed_output = process_virus_contigs(
-            fasta_file=args.nr_path,
-            diamond_results_file=os.path.join(args.output_dir, "results_clustered.m8"),
-            output_dir=args.output_dir
-            )
+             processed_output = process_virus_contigs(
+             fasta_file=args.nr_path,
+             diamond_results_file=os.path.join(args.output_dir, "results_clustered.m8"),
+             output_dir=args.output_dir
+             )
 
-            extract_contigs_diamond.process_diamond_results(
+             extract_contigs_diamond.process_diamond_results(
                 results_file=os.path.join(args.output_dir, "results_clustered.m8"),
                 out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
                 sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
             )
             
+    else:
+    logging.info("⚠️ Skipping Diamond step as requested.")
 
     if not args.skip_multiqc:
         run_multiqc(args.output_dir)
