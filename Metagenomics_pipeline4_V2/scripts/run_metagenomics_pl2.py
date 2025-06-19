@@ -272,7 +272,14 @@ def main():
             )
             
     else:
-    logging.info("⚠️ Skipping Diamond step as requested.")
+      logging.info("⚠️ Skipping Diamond step as requested.")
+        
+    if args.diamond and not args.skip_diamond and not args.nr_path:
+     logging.error("Missing --nr_path required for Diamond annotation.")
+     sys.exit(1)
+    if args.run_genomad and not args.skip_genomad and not args.genomad_db:
+      logging.error("Missing --genomad_db required for geNomad run.")
+      sys.exit(1)
 
     if not args.skip_multiqc:
         run_multiqc(args.output_dir)
