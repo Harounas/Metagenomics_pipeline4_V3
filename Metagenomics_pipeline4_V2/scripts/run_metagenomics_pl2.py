@@ -30,6 +30,7 @@ from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
 from Metagenomics_pipeline4_V2.ref_based_assembly import ref_based
 from Metagenomics_pipeline4_V2.deno_ref_assembly2 import deno_ref_based
 from Metagenomics_pipeline4_V2 import extract_contigs_diamond
+from Metagenomics_pipeline4_V2.alignment_summary import run_alignment_summary
 
 logging.basicConfig(
     level=logging.INFO,
@@ -161,6 +162,8 @@ def main():
     parser.add_argument("--nr_path", type=str, help="Path to nr FASTA file containing virus accession and name")
     parser.add_argument("--skip_genomad", action="store_true", help="Skip geNomad even if --run_genomad is used")
     parser.add_argument("--skip_diamond", action="store_true", help="Skip Diamond even if --diamond is used")
+    parser.add_argument("--run_alignment", action="store_true", help="Enable alignment summary with BWA")
+
     #parser.add_argument("--nr_path", type=str, help="Path to nr FASTA for annotation (required if --diamond)")
 
     args = parser.parse_args()
@@ -286,6 +289,18 @@ def main():
     if args.run_genomad and not args.skip_genomad and not args.genomad_db:
       logging.error("Missing --genomad_db required for geNomad run.")
       sys.exit(1)
+        
+    if args.run_alignment:
+     logging.info("🧬 Running alignment summary for viral contigs...")
+     run_alignment_summary(
+        diamond_tsv=os.path.join(args.output_dir, "diamond_results_contig_with_sampleid.tsv"),
+        merged_fasta=os.path.join(args.output_dir, "filtered_merged_contigs.fasta"),  # or clustered_long_contigs.fasta if appropriate
+        fastq_dir=args.output_dir,  # adjust if FASTQ files are in another location
+        output_file=os.path.join(args.output_dir, "alignment_summary.tsv"),
+        run_alignment=args.run_alignment
+    )
+    else:
+    logging.info("⚠️ Alignment step skipped (--run_alignment not provided)")
 
     if not args.skip_multiqc:
         run_multiqc(args.output_dir)
