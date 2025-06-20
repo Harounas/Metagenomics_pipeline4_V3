@@ -190,9 +190,9 @@ def main():
             )
 
             if args.run_genomad and not args.skip_genomad:
-                 genomad_input_fasta = os.path.join(args.output_dir, "merged_contigs_genomad.fasta")
-                 genomad_out_dir = os.path.join(args.output_dir, "genomad_output")
-                 clustered_out_dir = os.path.join(args.output_dir, "clustered_output")
+                genomad_input_fasta = os.path.join(args.output_dir, "merged_contigs_genomad.fasta")
+                genomad_out_dir = os.path.join(args.output_dir, "genomad_output")
+                clustered_out_dir = os.path.join(args.output_dir, "clustered_output")
                 final_long_clustered_fasta = os.path.join(args.output_dir, "clustered_long_contigs.fasta")
                 long_contigs_tsv = os.path.join(args.output_dir, "long_contigs_summary.tsv")
                 long_contigs_fasta = os.path.join(args.output_dir, "long_contigs.fasta")
