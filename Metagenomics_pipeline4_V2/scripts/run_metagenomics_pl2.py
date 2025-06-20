@@ -265,14 +265,14 @@ def main():
                 threads=args.threads
             )
             # Post-process and annotate
-               processed_output = process_virus_contigs(
-               fasta_file=args.nr_path,
-               diamond_results_file=os.path.join(args.output_dir, "results_clustered.m8"),
-               output_dir=args.output_dir
+                processed_output = process_virus_contigs(
+                fasta_file=args.nr_path,
+                diamond_results_file=os.path.join(args.output_dir, "results_clustered.m8"),
+                output_dir=args.output_dir
             )
 
-               extract_contigs_diamond.process_diamond_results(
-               results_file=os.path.join(args.output_dir, "results_clustered.m8"),
+                extract_contigs_diamond.process_diamond_results(
+                results_file=os.path.join(args.output_dir, "results_clustered.m8"),
                 out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
                 sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
             )
