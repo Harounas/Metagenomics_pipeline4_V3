@@ -20,7 +20,7 @@ Entrez.email = "harounasoum17@gmail.com"
 import csv
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
-
+import os
 
 def extract_long_contigs_kraken(base_contigs_dir, output_tsv="long_contigs_summary.tsv") -> Path:
     """
