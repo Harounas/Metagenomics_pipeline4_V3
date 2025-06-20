@@ -197,7 +197,7 @@ def main():
 
             diamond_result_file = os.path.join(args.output_dir, "results_clustered.m8")
             if os.path.isfile(diamond_result_file):
-                processed_output = process_virus_contigs(
+                processed_output = extract_contigs_diamond.process_virus_contigs(
                     fasta_file=args.nr_path,
                     diamond_results_file=diamond_result_file,
                     output_dir=args.output_dir
