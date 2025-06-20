@@ -21,6 +21,7 @@ import csv
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 import os
+import re
 
 def extract_long_contigs_kraken(base_contigs_dir, output_tsv="long_contigs_summary.tsv") -> Path:
     """
