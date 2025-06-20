@@ -217,7 +217,7 @@ def main():
                       if os.path.exists(contig_path):
                           for rec in SeqIO.parse(contig_path, "fasta"):
                               if rec.id == gene_id:
-                                  rec.id = f"{sample_id}|{gene_id}|{taxname}"
+                                  rec.id = f"{sample_id}|{gene_id}"
                                   rec.description = ""
                                   long_contigs_records.append(rec)
                                   break
