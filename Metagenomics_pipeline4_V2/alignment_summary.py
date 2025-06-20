@@ -7,7 +7,8 @@ def run_alignment_summary(diamond_tsv: str,
                           merged_fasta: str,
                           fastq_dir: str,
                           output_file: str,
-                          tmp_dir: str = "tmp_alignments") -> str:
+                          tmp_dir: str = "tmp_alignments",
+                          run_alignment: bool = True) -> str:
     """
     Aligns unmapped reads back to contigs using BWA and summarizes mapped read counts.
 
@@ -17,10 +18,15 @@ def run_alignment_summary(diamond_tsv: str,
         fastq_dir (str): Directory containing unmapped FASTQ files
         output_file (str): Path to write alignment summary TSV
         tmp_dir (str): Directory to store intermediate files
+        run_alignment (bool): Whether to run the alignment step or skip it
 
     Returns:
         str: Path to the final summary TSV file
     """
+    if not run_alignment:
+        print("⚠️ Alignment flag is disabled. Skipping alignment step.")
+        return ""
+
     os.makedirs(tmp_dir, exist_ok=True)
 
     # Load Diamond hits
@@ -34,7 +40,7 @@ def run_alignment_summary(diamond_tsv: str,
 
     for _, row in df.iterrows():
         sample_id = row["Sample_ID"]
-        contig_id = row["qseqid"]  # Full contig ID
+        contig_id = row["Contig_ID"] if "Contig_ID" in row else row.get("qseqid")
 
         if contig_id not in contig_dict:
             print(f"[!] Contig {contig_id} not found in FASTA. Skipping.")
