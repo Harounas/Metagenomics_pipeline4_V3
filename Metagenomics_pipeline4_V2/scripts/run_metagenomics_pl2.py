@@ -221,58 +221,58 @@ def main():
                                   rec.description = ""
                                   long_contigs_records.append(rec)
                                   break
-               SeqIO.write(long_contigs_records, long_contigs_fasta, "fasta")
+                SeqIO.write(long_contigs_records, long_contigs_fasta, "fasta")
 
-               extract_contigs_diamond.filter_and_merge(
+                extract_contigs_diamond.filter_and_merge(
                   fasta_paths=[genomad_input_fasta, long_contigs_fasta],
                   min_length=200,
                   output_path=merged_combined_fasta
             )
 
            # Run geNomad using genomad_input_fasta (from extract_and_merge_contigs_genomad)
-               genomad_output_viral_fasta = extract_contigs_diamond.run_genomad(
-               input_fasta=genomad_input_fasta,
-               output_dir=genomad_out_dir,
-               genomad_db=args.genomad_db,
-               threads=args.threads
+                genomad_output_viral_fasta = extract_contigs_diamond.run_genomad(
+                input_fasta=genomad_input_fasta,
+                output_dir=genomad_out_dir,
+                genomad_db=args.genomad_db,
+                threads=args.threads
             )
 
         # Prepare to merge geNomad and Kraken long contig results
-              merged_combined_fasta = os.path.join(args.output_dir, "combined_contigs_for_clustering.fasta")
+                merged_combined_fasta = os.path.join(args.output_dir, "combined_contigs_for_clustering.fasta")
 
-              extract_contigs_diamond.filter_and_merge(
-              fasta_paths=[genomad_output_viral_fasta, long_contigs_fasta],
-             min_length=200,
-              output_path=merged_combined_fasta)
+                extract_contigs_diamond.filter_and_merge(
+                fasta_paths=[genomad_output_viral_fasta, long_contigs_fasta],
+                min_length=200,
+                output_path=merged_combined_fasta)
 
 # Use merged_combined_fasta as input for clustering
-             clustered_fasta = extract_contigs_diamond.cluster_contigs(
+                clustered_fasta = extract_contigs_diamond.cluster_contigs(
              virus_fasta=merged_combined_fasta,
              output_dir=clustered_out_dir,
     threads=args.threads
 )
 
 
-             extract_contigs_diamond.extract_long_contigs(
+                extract_contigs_diamond.extract_long_contigs(
                 input_fasta=clustered_fasta,
                 output_fasta=final_long_clustered_fasta
             )
 
-             extract_contigs_diamond.run_diamond(
+                extract_contigs_diamond.run_diamond(
                 diamond_db=args.diamond_db,
                 query_file=final_long_clustered_fasta,
                 output_file=os.path.join(args.output_dir, "results_clustered.m8"),
                 threads=args.threads
             )
             # Post-process and annotate
-             processed_output = process_virus_contigs(
-             fasta_file=args.nr_path,
-             diamond_results_file=os.path.join(args.output_dir, "results_clustered.m8"),
-             output_dir=args.output_dir
+               processed_output = process_virus_contigs(
+               fasta_file=args.nr_path,
+               diamond_results_file=os.path.join(args.output_dir, "results_clustered.m8"),
+               output_dir=args.output_dir
             )
 
-             extract_contigs_diamond.process_diamond_results(
-                results_file=os.path.join(args.output_dir, "results_clustered.m8"),
+               extract_contigs_diamond.process_diamond_results(
+               results_file=os.path.join(args.output_dir, "results_clustered.m8"),
                 out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
                 sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
             )
