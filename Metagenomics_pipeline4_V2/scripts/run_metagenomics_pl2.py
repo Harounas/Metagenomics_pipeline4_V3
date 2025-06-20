@@ -158,7 +158,7 @@ def main():
     parser.add_argument("--pat_to_keep", type=str, nargs="+")
     parser.add_argument("--run_genomad", action="store_true")
     parser.add_argument("--genomad_db", type=str, help="Path to geNomad database")
-    parser.add_argument("--nr_path", type=str, required=True, help="Path to nr FASTA file containing virus accession and name")
+    parser.add_argument("--nr_path", type=str, help="Path to nr FASTA file containing virus accession and name")
     parser.add_argument("--skip_genomad", action="store_true", help="Skip geNomad even if --run_genomad is used")
     parser.add_argument("--skip_diamond", action="store_true", help="Skip Diamond even if --diamond is used")
     #parser.add_argument("--nr_path", type=str, help="Path to nr FASTA for annotation (required if --diamond)")
