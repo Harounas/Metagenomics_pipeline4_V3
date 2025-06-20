@@ -273,6 +273,12 @@ def main():
             
     else:
       logging.info("⚠️ Skipping Diamond step as requested.")
+      processed_output = process_virus_contigs(
+             fasta_file=args.nr_path,
+             diamond_results_file=os.path.join(args.output_dir, "results_clustered.m8"),
+             output_dir=args.output_dir
+             )
+      
         
     if args.diamond and not args.skip_diamond and not args.nr_path:
      logging.error("Missing --nr_path required for Diamond annotation.")
