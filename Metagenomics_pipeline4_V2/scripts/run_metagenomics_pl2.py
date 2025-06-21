@@ -273,11 +273,11 @@ def main():
                 output_dir=args.output_dir
             )
 
-                extract_contigs_diamond.process_diamond_results(
-                results_file=os.path.join(args.output_dir, "results_clustered.m8"),
-                out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
-                sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
-            )
+                #extract_contigs_diamond.process_diamond_results(
+               # results_file=os.path.join(args.output_dir, "results_clustered.m8"),
+               # out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
+               # sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
+           # )
             
                 
             else:
@@ -290,13 +290,13 @@ def main():
                     diamond_results_file=diamond_result_file,
                     output_dir=args.output_dir
                 )  
-                extract_contigs_diamond.process_diamond_results(
-                    results_file=diamond_result_file,
-                    out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
-                    sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
-                )
-            else:
-                logging.error(f"Expected Diamond result not found: {diamond_result_file}")
+                #extract_contigs_diamond.process_diamond_results(
+                   # results_file=diamond_result_file,
+                    #out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
+                    #sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
+                #)
+            #else:
+               # logging.error(f"Expected Diamond result not found: {diamond_result_file}")
         else:
             logging.warning("Diamond requested but --use_assembly not provided. Skipping contig analysis.")
     else:
@@ -317,11 +317,11 @@ def main():
             diamond_results_file=diamond_result_file,
             output_dir=args.output_dir
         )
-        extract_contigs_diamond.process_diamond_results(
-            results_file=diamond_result_file,
-            out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
-            sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
-        )
+        #extract_contigs_diamond.process_diamond_results(
+            #results_file=diamond_result_file,
+            #out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
+            #sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
+        #)
      else:
         logging.warning(f"Expected Diamond result not found: {diamond_result_file}")
     else:
