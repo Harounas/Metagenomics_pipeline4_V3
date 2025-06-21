@@ -31,6 +31,8 @@ from Metagenomics_pipeline4_V2.ref_based_assembly import ref_based
 from Metagenomics_pipeline4_V2.deno_ref_assembly2 import deno_ref_based
 from Metagenomics_pipeline4_V2 import extract_contigs_diamond
 from Metagenomics_pipeline4_V2.alignment_summary import run_alignment_summary
+from Metagenomics_pipeline4_V2.extract_contigs_diamond import process_virus_contigs
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -287,7 +289,7 @@ def main():
                     fasta_file=args.nr_path,
                     diamond_results_file=diamond_result_file,
                     output_dir=args.output_dir
-                )
+                )  
                 extract_contigs_diamond.process_diamond_results(
                     results_file=diamond_result_file,
                     out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
@@ -307,6 +309,24 @@ def main():
     if args.run_genomad and not args.skip_genomad and not args.genomad_db:
         logging.error("Missing --genomad_db required for geNomad run.")
         sys.exit(1)
+    if args.nr_path:
+    diamond_result_file = os.path.join(args.output_dir, "results_clustered.m8")
+    if os.path.isfile(diamond_result_file):
+        processed_output = process_virus_contigs(
+            fasta_file=args.nr_path,
+            diamond_results_file=diamond_result_file,
+            output_dir=args.output_dir
+        )
+        extract_contigs_diamond.process_diamond_results(
+            results_file=diamond_result_file,
+            out_csv=os.path.join(args.output_dir, "extracted_clustered_virus.csv"),
+            sorted_csv=os.path.join(args.output_dir, "extracted_clustered_virus_sorted.csv")
+        )
+    else:
+        logging.warning(f"Expected Diamond result not found: {diamond_result_file}")
+else:
+    logging.error("Missing --nr_path required for virus annotation")
+    sys.exit(1)
 
     if args.run_alignment:
         logging.info("🧬 Running alignment summary for viral contigs...")
