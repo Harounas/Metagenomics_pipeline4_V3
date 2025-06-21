@@ -324,9 +324,9 @@ def main():
         )
      else:
         logging.warning(f"Expected Diamond result not found: {diamond_result_file}")
-   else:
-    logging.error("Missing --nr_path required for virus annotation")
-    sys.exit(1)
+    else:
+     logging.error("Missing --nr_path required for virus annotation")
+     sys.exit(1)
 
     if args.run_alignment:
         logging.info("🧬 Running alignment summary for viral contigs...")
