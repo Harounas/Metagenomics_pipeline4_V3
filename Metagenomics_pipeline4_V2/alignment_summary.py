@@ -40,7 +40,7 @@ def run_alignment_summary(diamond_tsv: str,
 
     for _, row in df.iterrows():
         sample_id = row["Sample_ID"]
-        contig_id = row["Contig_ID"] if "Contig_ID" in row else row.get("qseqid")
+        contig_id = row["Contig_ID"] if "Contig_ID" in row else row.get("query_id")
 
         if contig_id not in contig_dict:
             print(f"[!] Contig {contig_id} not found in FASTA. Skipping.")
