@@ -16,9 +16,13 @@ run_kr_abundance --input_dir /home/harouna/ARSNACAdata/bamfiles/mypipeline --out
 
 
   # Installation
-  * git clone https://github.com/Harounas/Metagenomics_pipeline4-V0.git
+  * conda create -n genomad python=3.9 -y
+  * conda activate genomad
+  * git clone https://github.com/Harounas/Metagenomics_pipeline4_V3.git
   * cd Metagenomics_pipeline
   * sudo pip install -e .
+  * cd ..
+  * conda install bioconda::bwa
   * conda install -c bioconda trimmomatic
   * conda install -c bioconda bowtie2
   * conda install -c bioconda kraken2
