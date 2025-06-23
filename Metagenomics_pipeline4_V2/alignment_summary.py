@@ -51,33 +51,41 @@ def run_alignment_summary(diamond_tsv: str,
         ref_fasta = os.path.join(tmp_dir, f"{prefix}.fasta")
         sam_out = os.path.join(tmp_dir, f"{prefix}.sam")
 
-        # Write contig to reference FASTA
-        SeqIO.write(contig_dict[contig_id], ref_fasta, "fasta")
+        if os.path.exists(sam_out):
+            print(f"📄 Using existing alignment: {sam_out}")
+        else:
+            # Write contig to reference FASTA
+            SeqIO.write(contig_dict[contig_id], ref_fasta, "fasta")
 
-        # Index with BWA
-        subprocess.run(["bwa", "index", ref_fasta], check=True)
+            # Index with BWA
+            subprocess.run(["bwa", "index", ref_fasta], check=True)
 
-        r1 = os.path.join(fastq_dir, f"{sample_id}_unmapped_1.fastq.gz")
-        r2 = os.path.join(fastq_dir, f"{sample_id}_unmapped_2.fastq.gz")
-        if not os.path.exists(r1) or not os.path.exists(r2):
-            print(f"[!] FASTQ files missing for {sample_id}. Skipping.")
-            continue
+            r1 = os.path.join(fastq_dir, f"{sample_id}_unmapped_1.fastq.gz")
+            r2 = os.path.join(fastq_dir, f"{sample_id}_unmapped_2.fastq.gz")
+            if not os.path.exists(r1) or not os.path.exists(r2):
+                print(f"[!] FASTQ files missing for {sample_id}. Skipping.")
+                continue
 
-        try:
-            with open(sam_out, "w") as samfile:
-                subprocess.run(["bwa", "mem", ref_fasta, r1, r2], stdout=samfile, check=True)
-        except subprocess.CalledProcessError:
-            print(f"[!] BWA alignment failed for {sample_id} vs {contig_id}.")
-            continue
+            try:
+                with open(sam_out, "w") as samfile:
+                    subprocess.run(["bwa", "mem", ref_fasta, r1, r2], stdout=samfile, check=True)
+            except subprocess.CalledProcessError:
+                print(f"[!] BWA alignment failed for {sample_id} vs {contig_id}.")
+                continue
 
+        # Parse SAM to count mapped reads
         mapped_reads = 0
-        with open(sam_out, "r") as f:
-            for line in f:
-                if line.startswith("@"): continue
-                fields = line.split("\t")
-                flag = int(fields[1])
-                if not flag & 0x4:
-                    mapped_reads += 1
+        try:
+            with open(sam_out, "r") as f:
+                for line in f:
+                    if line.startswith("@"): continue
+                    fields = line.split("\t")
+                    flag = int(fields[1])
+                    if not flag & 0x4:
+                        mapped_reads += 1
+        except Exception as e:
+            print(f"[!] Failed to read SAM file {sam_out}: {e}")
+            continue
 
         results.append({
             "Sample_ID": sample_id,
