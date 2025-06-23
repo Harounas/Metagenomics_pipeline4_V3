@@ -32,7 +32,7 @@ from Metagenomics_pipeline4_V2.deno_ref_assembly2 import deno_ref_based
 from Metagenomics_pipeline4_V2 import extract_contigs_diamond
 from Metagenomics_pipeline4_V2.alignment_summary import run_alignment_summary
 from Metagenomics_pipeline4_V2.extract_contigs_diamond import process_virus_contigs
-
+from Metagenomics_pipeline4_V2.process_clustered_contigs import process_clustered_contigs
 
 logging.basicConfig(
     level=logging.INFO,
