@@ -335,8 +335,8 @@ def main():
 )
 
     if args.run_alignment:
-    logging.info("🧬 Running alignment summary for viral contigs...")
-    run_alignment_summary(
+     logging.info("🧬 Running alignment summary for viral contigs...")
+     run_alignment_summary(
         diamond_tsv=filtered_clusters_file,
         merged_fasta=os.path.join(args.output_dir, "merged_combined_fasta"),
         fastq_dir=args.output_dir,
