@@ -8,91 +8,110 @@ def run_alignment_summary(diamond_tsv: str,
                           fastq_dir: str,
                           output_file: str,
                           tmp_dir: str = "tmp_alignments",
-                          run_alignment: bool = True) -> str:
+                          run_alignment: bool = True,
+                          threads: int = 8,
+                          min_contig_len: int = 500) -> str:
     """
-    Aligns unmapped reads back to contigs using BWA and summarizes mapped read counts.
+    Aligns unmapped reads back to individual contigs using BWA and summarizes mapped read counts per contig.
 
     Args:
         diamond_tsv (str): Path to diamond_results_contig_with_sampleid.tsv
-        merged_fasta (str): Path to the merged viral contigs FASTA file
-        fastq_dir (str): Directory containing unmapped FASTQ files
+        merged_fasta (str): Path to merged contigs FASTA
+        fastq_dir (str): Directory with unmapped FASTQ files
         output_file (str): Path to write alignment summary TSV
-        tmp_dir (str): Directory to store intermediate files
-        run_alignment (bool): Whether to run the alignment step or skip it
+        tmp_dir (str): Temp directory for intermediates
+        run_alignment (bool): If False, skip alignments
+        threads (int): Threads for BWA
+        min_contig_len (int): Min contig length to align
 
     Returns:
-        str: Path to the final summary TSV file
+        str: Path to TSV summary
     """
     if not run_alignment:
-        print("⚠️ Alignment flag is disabled. Skipping alignment step.")
+        print("⚠️ Alignment disabled. Skipping.")
         return ""
 
     os.makedirs(tmp_dir, exist_ok=True)
 
-    # Load Diamond hits
+    # Load contigs
+    contig_dict = {
+        rec.id: rec
+        for rec in SeqIO.parse(merged_fasta, "fasta")
+        if len(rec.seq) >= min_contig_len
+    }
+
+    print(f"🔍 Loaded {len(contig_dict)} contigs ≥ {min_contig_len} bp")
+
+    # Load hits
     df = pd.read_csv(diamond_tsv, sep="\t")
-
-    # Load all contigs from merged FASTA into a dictionary
-    print("🔍 Loading contigs...")
-    contig_dict = SeqIO.to_dict(SeqIO.parse(merged_fasta, "fasta"))
-
     results = []
 
     for _, row in df.iterrows():
         sample_id = row["Sample_ID"]
-        contig_id = row["Contig_ID"] if "Contig_ID" in row else row.get("query_id")
+        contig_id = row.get("Contig_ID") or row.get("query_id")
 
         if contig_id not in contig_dict:
-            print(f"[!] Contig {contig_id} not found in FASTA. Skipping.")
+            print(f"[!] Contig {contig_id} missing or too short. Skipping.")
             continue
 
-        safe_contig_id = contig_id.replace("|", "_")
-        prefix = f"{sample_id}_{safe_contig_id}"
+        contig = contig_dict[contig_id]
+        safe_id = contig_id.replace("|", "_")
+        prefix = f"{sample_id}_{safe_id}"
         ref_fasta = os.path.join(tmp_dir, f"{prefix}.fasta")
-        sam_out = os.path.join(tmp_dir, f"{prefix}.sam")
+        bam_out = os.path.join(tmp_dir, f"{prefix}.bam")
 
-        if os.path.exists(sam_out):
-            print(f"📄 Using existing alignment: {sam_out}")
-        else:
-            # Write contig to reference FASTA
-            SeqIO.write(contig_dict[contig_id], ref_fasta, "fasta")
+        r1 = os.path.join(fastq_dir, f"{sample_id}_unmapped_1.fastq.gz")
+        r2 = os.path.join(fastq_dir, f"{sample_id}_unmapped_2.fastq.gz")
+        if not os.path.exists(r1) or not os.path.exists(r2):
+            print(f"[!] Missing FASTQ for {sample_id}. Skipping.")
+            continue
 
-            # Index with BWA
+        # Write reference
+        if not os.path.exists(ref_fasta):
+            SeqIO.write(contig, ref_fasta, "fasta")
+
+        # Index contig (once)
+        if not all(os.path.exists(ref_fasta + ext) for ext in [".bwt", ".amb", ".ann", ".pac", ".sa"]):
             subprocess.run(["bwa", "index", ref_fasta], check=True)
 
-            r1 = os.path.join(fastq_dir, f"{sample_id}_unmapped_1.fastq.gz")
-            r2 = os.path.join(fastq_dir, f"{sample_id}_unmapped_2.fastq.gz")
-            if not os.path.exists(r1) or not os.path.exists(r2):
-                print(f"[!] FASTQ files missing for {sample_id}. Skipping.")
-                continue
-
+        if os.path.exists(bam_out):
+            print(f"📄 Using existing BAM: {bam_out}")
+        else:
             try:
-                with open(sam_out, "w") as samfile:
-                    subprocess.run(["bwa", "mem", ref_fasta, r1, r2], stdout=samfile, check=True)
+                bwa = subprocess.Popen(
+                    ["bwa", "mem", "-t", str(threads), ref_fasta, r1, r2],
+                    stdout=subprocess.PIPE
+                )
+                subprocess.run(["samtools", "view", "-bS", "-o", bam_out], stdin=bwa.stdout, check=True)
+                bwa.stdout.close()
+                bwa.wait()
             except subprocess.CalledProcessError:
-                print(f"[!] BWA alignment failed for {sample_id} vs {contig_id}.")
+                print(f"[!] BWA failed for {sample_id} vs {contig_id}")
                 continue
 
-        # Parse SAM to count mapped reads
-        mapped_reads = 0
+        # Count mapped reads in BAM
         try:
-            with open(sam_out, "r") as f:
-                for line in f:
-                    if line.startswith("@"): continue
-                    fields = line.split("\t")
-                    flag = int(fields[1])
-                    if not flag & 0x4:
-                        mapped_reads += 1
-        except Exception as e:
-            print(f"[!] Failed to read SAM file {sam_out}: {e}")
-            continue
+            result = subprocess.run(
+                ["samtools", "view", "-c", "-F", "4", bam_out],
+                capture_output=True, text=True, check=True
+            )
+            mapped_reads = int(result.stdout.strip())
+        except subprocess.CalledProcessError:
+            print(f"[!] BAM read count failed for {prefix}")
+            mapped_reads = 0
 
         results.append({
             "Sample_ID": sample_id,
             "Contig_ID": contig_id,
             "Aligned_Reads": mapped_reads
         })
-        print(f"✅ {sample_id} vs {contig_id} → {mapped_reads} reads aligned.")
+        print(f"✅ {sample_id} vs {contig_id}: {mapped_reads} reads aligned.")
+
+        # Cleanup
+        try:
+            os.remove(bam_out)
+        except Exception as e:
+            print(f"[!] Failed to delete {bam_out}: {e}")
 
     summary_df = pd.DataFrame(results)
     summary_df.to_csv(output_file, sep="\t", index=False)
