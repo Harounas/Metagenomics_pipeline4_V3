@@ -335,14 +335,18 @@ def main():
 )
 
     if args.run_alignment:
-       logging.info("🧬 Running alignment summary for viral contigs...")
-       run_alignment_summary(
+    logging.info("🧬 Running alignment summary for viral contigs...")
+    run_alignment_summary(
         diamond_tsv=filtered_clusters_file,
         merged_fasta=os.path.join(args.output_dir, "merged_combined_fasta"),
         fastq_dir=args.output_dir,
         output_file=os.path.join(args.output_dir, "alignment_summary.tsv"),
-        run_alignment=args.run_alignment
+        tmp_dir=os.path.join(args.output_dir, "tmp_alignments"),
+        run_alignment=args.run_alignment,
+        threads=8,  # 👈 Use more threads if you have more CPUs
+        min_contig_len=500  # 👈 Only align contigs ≥ 500 bp
     )
+
 
     else:
         logging.info("⚠️ Alignment step skipped (--run_alignment not provided)")
