@@ -338,7 +338,7 @@ def main():
      logging.info("🧬 Running alignment summary for viral contigs...")
      run_alignment_summary(
         diamond_tsv=filtered_clusters_file,
-        merged_fasta=os.path.join(args.output_dir, merged_combined_fasta),
+        merged_fasta=os.path.join(args.output_dir, "combined_contigs_for_clustering.fasta"),
         fastq_dir=args.output_dir,
         output_file=os.path.join(args.output_dir, "alignment_summary.tsv"),
         tmp_dir=os.path.join(args.output_dir, "tmp_alignments"),
