@@ -34,6 +34,7 @@ from Metagenomics_pipeline4_V2.alignment_summary import run_alignment_summary
 from Metagenomics_pipeline4_V2.extract_contigs_diamond import process_virus_contigs
 from Metagenomics_pipeline4_V2.process_clustered_contigs import process_clustered_contigs
 
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -165,6 +166,9 @@ def main():
     parser.add_argument("--skip_genomad", action="store_true", help="Skip geNomad even if --run_genomad is used")
     parser.add_argument("--skip_diamond", action="store_true", help="Skip Diamond even if --diamond is used")
     parser.add_argument("--run_alignment", action="store_true", help="Enable alignment summary with BWA")
+    parser.add_argument("--run_scaffolding", action="store_true",
+                    help="Run RagTag scaffolding for viral contigs using virus name from TSV")
+
 
     #parser.add_argument("--nr_path", type=str, help="Path to nr FASTA for annotation (required if --diamond)")
 
@@ -333,6 +337,30 @@ def main():
     diamond_tsv=os.path.join(args.output_dir, "diamond_results_contig_with_sampleid.tsv"),
     output_dir=args.output_dir
 )
+
+
+    if args.run_scaffolding:
+      logging.info("🧬 Running RagTag scaffolding for each sample/virus…")
+      df = pd.read_csv(filtered_clusters_file, sep="\t")
+      unique_pairs = df[["Sample_ID", "virus"]].drop_duplicates()
+
+      for _, row in unique_pairs.iterrows():
+          sample_id = row["Sample_ID"]
+          virus = row["virus"]
+
+          try:
+              fasta_out, length_out = scaffold_virus_contigs(
+                  tsv_path=filtered_clusters_file,
+                  sample_id=sample_id,
+                  virus_name=virus,
+                  contigs_root=args.output_dir,
+                  output_root=os.path.join(args.output_dir, "scaffolded_out"),
+                  threads=args.threads
+              )
+              logging.info(f"✅ Scaffolded {sample_id} – {virus}: {fasta_out}")
+          except Exception as e:
+              logging.error(f"❌ Scaffold failed for {sample_id} – {virus}: {e}")
+
 
     if args.run_alignment:
      logging.info("🧬 Running alignment summary for viral contigs...")
