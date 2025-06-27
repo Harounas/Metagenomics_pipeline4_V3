@@ -63,7 +63,16 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
                     run_bowtie2(trimmed_forward, trimmed_reverse, base_name, bowtie2_index, output_dir, threads)
                 unmapped_r1, unmapped_r2 = bowtie_unmapped_r1, bowtie_unmapped_r2
 
-            kraken_input = run_spades(unmapped_r1, unmapped_r2, base_name, output_dir, threads) if use_assembly else unmapped_r1
+            if use_assembly:
+                contigs_file = os.path.join(output_dir, f"{base_name}_contigs.fasta")
+                if skip_existing and os.path.exists(contigs_file):
+                    logging.info(f"[SKIP] Contigs exist for {base_name}, skipping assembly.")
+                else:
+                    logging.info(f"Running SPAdes for sample {base_name}")
+                    contigs_file = run_spades(unmapped_r1, unmapped_r2, base_name, output_dir, threads)
+                kraken_input = contigs_file
+            else:
+                kraken_input = unmapped_r1
 
         if not skip_existing or not os.path.exists(kraken_report):
             logging.info(f"Running Kraken2 for sample {base_name}")
