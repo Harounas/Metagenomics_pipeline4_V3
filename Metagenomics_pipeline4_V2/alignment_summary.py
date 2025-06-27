@@ -110,9 +110,15 @@ def run_alignment_summary(diamond_tsv: str,
         # Cleanup
         try:
             os.remove(bam_out)
+            os.remove(ref_fasta)
+            for ext in [".bwt", ".amb", ".ann", ".pac", ".sa"]:
+                index_file = ref_fasta + ext
+                if os.path.exists(index_file):
+                    os.remove(index_file)
         except Exception as e:
-            print(f"[!] Failed to delete {bam_out}: {e}")
+            print(f"[!] Failed to delete intermediary files for {prefix}: {e}")
 
+    # Save summary
     summary_df = pd.DataFrame(results)
     summary_df.to_csv(output_file, sep="\t", index=False)
     print(f"\n📝 Alignment summary saved to: {output_file}")
