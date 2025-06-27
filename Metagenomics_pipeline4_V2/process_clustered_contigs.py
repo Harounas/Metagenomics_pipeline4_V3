@@ -38,18 +38,20 @@ def process_clustered_contigs(clstr_file, diamond_tsv, output_dir):
 
     # Merge representatives with Diamond to get annotations
     rep_annot = representatives.rename(columns={"id": "query_id"})
-    rep_annot = pd.merge(rep_annot, diamond[['Sample_ID', 'query_id', 'contigs_len', 'virus', 'evalue', 'bitscore']],
+    rep_annot = pd.merge(rep_annot, diamond[['Sample_ID', 'query_id','pident','contigs_len', 'virus', 'evalue', 'bitscore']],
                          on='query_id', how='left')
 
     # Create cluster-to-virus, evalue, bitscore mappings
     cluster_to_virus = dict(zip(rep_annot['clstr'], rep_annot['virus']))
     cluster_to_evalue = dict(zip(rep_annot['clstr'], rep_annot['evalue']))
     cluster_to_bitscore = dict(zip(rep_annot['clstr'], rep_annot['bitscore']))
+    cluster_to_id = dict(zip(rep_annot['clstr'], rep_annot['pident'])
 
     # Map those values to all filtered contigs
     filtered['virus'] = filtered['clstr'].map(cluster_to_virus)
     filtered['evalue'] = filtered['clstr'].map(cluster_to_evalue)
     filtered['bitscore'] = filtered['clstr'].map(cluster_to_bitscore)
+    filtered['pident'] = filtered['clstr'].map(cluster_to_id)
 
     # Filter to viral contigs
     filtered = filtered.rename(columns={"id": "query_id"})
