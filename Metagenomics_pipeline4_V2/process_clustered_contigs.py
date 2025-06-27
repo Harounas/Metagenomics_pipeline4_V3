@@ -45,7 +45,7 @@ def process_clustered_contigs(clstr_file, diamond_tsv, output_dir):
     cluster_to_virus = dict(zip(rep_annot['clstr'], rep_annot['virus']))
     cluster_to_evalue = dict(zip(rep_annot['clstr'], rep_annot['evalue']))
     cluster_to_bitscore = dict(zip(rep_annot['clstr'], rep_annot['bitscore']))
-    cluster_to_id = dict(zip(rep_annot['clstr'], rep_annot['pident'])
+    cluster_to_id = dict(zip(rep_annot['clstr'], rep_annot['pident']))
 
     # Map those values to all filtered contigs
     filtered['virus'] = filtered['clstr'].map(cluster_to_virus)
