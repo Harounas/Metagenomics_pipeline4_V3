@@ -341,7 +341,7 @@ def main():
 
     if args.run_scaffolding:
       logging.info("🧬 Running RagTag scaffolding for each sample/virus…")
-      df = pd.read_csv(filtered_clusters_file, sep="\t")
+      df = pd.read_csv(os.path.join(args.output_dir, "filtered_clusters_assigned_rep_virus.tsv"), sep="\t")
       unique_pairs = df[["Sample_ID", "virus"]].drop_duplicates()
 
       for _, row in unique_pairs.iterrows():
