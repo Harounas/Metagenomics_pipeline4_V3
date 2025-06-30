@@ -231,7 +231,7 @@ def main():
 
                 extract_contigs_diamond.filter_and_merge(
                   fasta_paths=[genomad_input_fasta, long_contigs_fasta],
-                  min_length=200,
+                  min_length=500,
                   output_path=merged_combined_fasta
             )
 
