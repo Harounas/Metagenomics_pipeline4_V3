@@ -337,6 +337,30 @@ def main():
     diamond_tsv=os.path.join(args.output_dir, "diamond_results_contig_with_sampleid.tsv"),
     output_dir=args.output_dir
 )
+    # Add these AFTER the long contigs + geNomad + clustering + diamond logic
+
+    short_genomad_tsv = os.path.join(args.output_dir, "short_contig_virus_table.tsv")
+    short_kraken_tsv  = os.path.join(args.output_dir, "short_contigs_summary.tsv")
+    merged_short_tsv  = os.path.join(args.output_dir, "combined_short_contigs.tsv")
+
+    extract_contigs_diamond.save_genomad_short_virus_contigs(
+    input_tsv=os.path.join(genomad_out_dir, "merged_contigs_genomad_summary/merged_contigs_genomad_virus_genes.tsv"),
+    output_tsv="short_contig_virus_table.tsv",
+    output_dir=args.output_dir
+   )
+
+    extract_contigs_diamond.extract_short_contigs_kraken(
+    base_contigs_dir=args.output_dir,
+    output_tsv="short_contigs_summary.tsv",
+    output_dir=args.output_dir
+)
+
+    extract_contigs_diamond.merge_short_contigs(
+    tsv_a=short_genomad_tsv,
+    tsv_b=short_kraken_tsv,
+    output_tsv="combined_short_contigs.tsv",
+    output_dir=args.output_dir
+)
 
 
     if args.run_scaffolding:
