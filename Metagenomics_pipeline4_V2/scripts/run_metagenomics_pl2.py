@@ -1,3 +1,5 @@
+
+
 #!/usr/bin/env python3
 """
 run_metagenomics_pl2.py
@@ -14,7 +16,7 @@ import sys
 import logging
 import subprocess
 import csv
-from Bio import SeqIO
+from Bio import SeqIO, Entrez
 from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
     process_sample,
     aggregate_kraken_results,
@@ -31,7 +33,7 @@ from Metagenomics_pipeline4_V2 import extract_contigs_diamond
 from Metagenomics_pipeline4_V2.alignment_summary import run_alignment_summary
 from Metagenomics_pipeline4_V2.extract_contigs_diamond import process_virus_contigs
 from Metagenomics_pipeline4_V2.process_clustered_contigs import process_clustered_contigs
-from Metagenomics_pipeline4_V2.scaffold_virus import scaffold_virus_contigs
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,7 +48,8 @@ def create_sample_id_df(input_dir):
     sample_ids = []
     for f in glob.glob(os.path.join(input_dir, "*_R1*.fastq*")):
         sid = os.path.basename(f)
-        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz", "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
+        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz",
+                    "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
             sid = sid.replace(pat, "")
         sample_ids.append(sid)
     return pd.DataFrame(sample_ids, columns=["Sample_IDs"])
@@ -67,18 +70,16 @@ def validate_inputs(args):
     if args.use_precomputed_reports and not glob.glob(os.path.join(args.output_dir, "*_report.txt")):
         logging.error("No precomputed Kraken reports found in output directory")
         sys.exit(1)
-    if args.diamond and not args.skip_diamond and not args.nr_path:
-        logging.error("Missing --nr_path required for Diamond annotation.")
-        sys.exit(1)
-    if args.run_genomad and not args.skip_genomad and not args.genomad_db:
-        logging.error("Missing --genomad_db required for geNomad run.")
+    if args.run_genomad and not args.genomad_db:
+        logging.error("You must provide --genomad_db when using --run_genomad")
         sys.exit(1)
 
 def process_samples(args):
     run_bowtie = not args.no_bowtie2 and args.bowtie2_index is not None
     for forward in glob.glob(os.path.join(args.input_dir, "*_R1*.fastq*")):
         base = os.path.basename(forward)
-        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz", "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
+        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz",
+                    "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
             base = base.replace(pat, "")
         reverse = None
         if not args.use_assembly or args.paired_assembly:
@@ -126,13 +127,15 @@ def handle_metadata(args):
     )
 
 def main():
-    parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis")
+    parser = argparse.ArgumentParser(
+        description="Metagenomics pipeline for taxonomic classification and analysis"
+    )
     parser.add_argument("--kraken_db", required=True)
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--input_dir", required=True)
     parser.add_argument("--bowtie2_index")
     parser.add_argument("--threads", type=int, default=8)
-    parser.add_argument("--diamond_db")
+    parser.add_argument("--diamond_db", default="/home/soumareh/mnt/nrdb/nr")
     parser.add_argument("--diamond", action="store_true")
     parser.add_argument("--metadata_file")
     parser.add_argument("--read_count", type=int, default=1)
@@ -158,21 +161,13 @@ def main():
     parser.add_argument("--col_filter", type=str, nargs="+")
     parser.add_argument("--pat_to_keep", type=str, nargs="+")
     parser.add_argument("--run_genomad", action="store_true")
-    parser.add_argument("--genomad_db")
-    parser.add_argument("--nr_path")
-    parser.add_argument("--skip_genomad", action="store_true")
-    parser.add_argument("--skip_diamond", action="store_true")
-    parser.add_argument("--run_alignment", action="store_true")
-    parser.add_argument("--run_scaffolding", action="store_true")
-
-    args = parser.parse_args()
-    os.makedirs(args.output_dir, exist_ok=True)
-    validate_inputs(args)
-    process_samples(args)
-    merged_tsv = handle_metadata(args)
-    if __name__ == "__main__":
-    main()
-
+    parser.add_argument("--genomad_db", type=str, help="Path to geNomad database")
+    parser.add_argument("--nr_path", type=str, help="Path to nr FASTA file containing virus accession and name")
+    parser.add_argument("--skip_genomad", action="store_true", help="Skip geNomad even if --run_genomad is used")
+    parser.add_argument("--skip_diamond", action="store_true", help="Skip Diamond even if --diamond is used")
+    parser.add_argument("--run_alignment", action="store_true", help="Enable alignment summary with BWA")
+    parser.add_argument("--run_scaffolding", action="store_true",
+                    help="Run RagTag scaffolding for viral contigs using virus name from TSV")
 
 
     #parser.add_argument("--nr_path", type=str, help="Path to nr FASTA for annotation (required if --diamond)")
@@ -236,7 +231,7 @@ def main():
 
                 extract_contigs_diamond.filter_and_merge(
                   fasta_paths=[genomad_input_fasta, long_contigs_fasta],
-                  min_length=500,
+                  min_length=200,
                   output_path=merged_combined_fasta
             )
 
@@ -342,30 +337,6 @@ def main():
     diamond_tsv=os.path.join(args.output_dir, "diamond_results_contig_with_sampleid.tsv"),
     output_dir=args.output_dir
 )
-    # Add these AFTER the long contigs + geNomad + clustering + diamond logic
-
-    short_genomad_tsv = os.path.join(args.output_dir, "short_contig_virus_table.tsv")
-    short_kraken_tsv  = os.path.join(args.output_dir, "short_contigs_summary.tsv")
-    merged_short_tsv  = os.path.join(args.output_dir, "combined_short_contigs.tsv")
-
-    extract_contigs_diamond.save_genomad_short_virus_contigs(
-    input_tsv=os.path.join(genomad_out_dir, "merged_contigs_genomad_summary/merged_contigs_genomad_virus_genes.tsv"),
-    output_tsv="short_contig_virus_table.tsv",
-    output_dir=args.output_dir
-   )
-
-    extract_contigs_diamond.extract_short_contigs_kraken(
-    base_contigs_dir=args.output_dir,
-    output_tsv="short_contigs_summary.tsv",
-    output_dir=args.output_dir
-)
-
-    extract_contigs_diamond.merge_short_contigs(
-    tsv_a=short_genomad_tsv,
-    tsv_b=short_kraken_tsv,
-    output_tsv="combined_short_contigs.tsv",
-    output_dir=args.output_dir
-)
 
 
     if args.run_scaffolding:
@@ -456,10 +427,6 @@ def main():
                 ref_based(pd.read_csv(merged_tsv_file, sep="\t"), args.output_dir, args.input_dir, args.bowtie2_index, args.threads, "S")
             if args.run_deno_ref:
                 deno_ref_based(merged_tsv_file, args.output_dir, args.input_dir, args.threads, "S")
-    
- 
- 
- 
+
 if __name__ == "__main__":
     main()
-
