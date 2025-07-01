@@ -105,7 +105,7 @@ def extract_long_contigs_kraken(base_contigs_dir, output_tsv="long_contigs_summa
 """
 
 def extract_short_contigs_kraken(base_contigs_dir, output_tsv="short_contigs_summary.tsv"):
-    """
+    
     #For each sample and each virus taxon:
       #- find all contigs assigned by Kraken2
       #- compute each contig’s length from contigs.fasta
@@ -115,7 +115,7 @@ def extract_short_contigs_kraken(base_contigs_dir, output_tsv="short_contigs_sum
      # - {sample_id}_Viruses_kraken_report.txt
     #  - {sample_id}_kraken2_output.txt
    #   - {sample_id}/contigs.fasta
-    """
+    
     allowed_ranks = {"F", "F1", "F2", "G", "G1", "G2", "S", "S1", "S2"}
     base_dir = Path(base_contigs_dir)
     header = ["Sample_ID", "gene", "contig_length", "taxname"]
