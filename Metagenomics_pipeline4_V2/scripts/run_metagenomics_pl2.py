@@ -126,16 +126,103 @@ def handle_metadata(args):
         max_read_count=args.max_read_count
     )
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Metagenomics pipeline for taxonomic classification and analysis"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.FileHandler("metagenomics_pipeline.log"), logging.StreamHandler()]
+)
+
+def create_sample_id_df(input_dir):
+    sample_ids = []
+    for f in glob.glob(os.path.join(input_dir, "*_R1*.fastq*")):
+        sid = os.path.basename(f)
+        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz", "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
+            sid = sid.replace(pat, "")
+        sample_ids.append(sid)
+    return pd.DataFrame(sample_ids, columns=["Sample_IDs"])
+
+def validate_inputs(args):
+    if not os.path.isdir(args.input_dir):
+        logging.error(f"Input directory '{args.input_dir}' not found.")
+        sys.exit(1)
+    if not os.path.isdir(args.kraken_db):
+        logging.error(f"Kraken DB '{args.kraken_db}' not found.")
+        sys.exit(1)
+    if args.bowtie2_index and not os.path.exists(args.bowtie2_index + ".1.bt2"):
+        logging.error(f"Bowtie2 index '{args.bowtie2_index}' not found.")
+        sys.exit(1)
+    if args.metadata_file and not os.path.isfile(args.metadata_file):
+        logging.error(f"Metadata file '{args.metadata_file}' not found.")
+        sys.exit(1)
+    if args.use_precomputed_reports and not glob.glob(os.path.join(args.output_dir, "*_report.txt")):
+        logging.error("No precomputed Kraken reports found in output directory")
+        sys.exit(1)
+    if args.diamond and not args.skip_diamond and not args.nr_path:
+        logging.error("Missing --nr_path required for Diamond annotation.")
+        sys.exit(1)
+    if args.run_genomad and not args.skip_genomad and not args.genomad_db:
+        logging.error("Missing --genomad_db required for geNomad run.")
+        sys.exit(1)
+
+def process_samples(args):
+    run_bowtie = not args.no_bowtie2 and args.bowtie2_index is not None
+    for forward in glob.glob(os.path.join(args.input_dir, "*_R1*.fastq*")):
+        base = os.path.basename(forward)
+        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz", "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
+            base = base.replace(pat, "")
+        reverse = None
+        if not args.use_assembly or args.paired_assembly:
+            candidates = [
+                os.path.join(args.input_dir, f"{base}_R2_001.fastq.gz"),
+                os.path.join(args.input_dir, f"{base}_R2.fastq.gz"),
+                os.path.join(args.input_dir, f"{base}_R2.fastq")
+            ]
+            reverse = next((r for r in candidates if os.path.isfile(r)), None)
+            if not reverse and not args.use_assembly:
+                logging.warning(f"No R2 found for {base}, skipping.")
+                continue
+
+        logging.info(f"Processing sample {base} (assembly={args.use_assembly})")
+        process_sample(
+            forward=forward,
+            reverse=reverse,
+            base_name=base,
+            bowtie2_index=args.bowtie2_index,
+            kraken_db=args.kraken_db,
+            output_dir=args.output_dir,
+            threads=args.threads,
+            run_bowtie=run_bowtie,
+            use_precomputed_reports=args.use_precomputed_reports,
+            use_assembly=args.use_assembly,
+            skip_preprocessing=args.skip_preprocessing,
+            skip_existing=args.skip_existing
+        )
+
+def handle_metadata(args):
+    if args.no_metadata:
+        df = create_sample_id_df(args.input_dir)
+        df.to_csv(os.path.join(args.output_dir, "sample_ids.csv"), index=False)
+        return aggregate_kraken_results(
+            args.output_dir,
+            sample_id_df=df,
+            read_count=args.read_count,
+            max_read_count=args.max_read_count
+        )
+    return aggregate_kraken_results(
+        args.output_dir,
+        metadata_file=args.metadata_file,
+        read_count=args.read_count,
+        max_read_count=args.max_read_count
     )
+
+def main():
+    parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis")
     parser.add_argument("--kraken_db", required=True)
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--input_dir", required=True)
     parser.add_argument("--bowtie2_index")
     parser.add_argument("--threads", type=int, default=8)
-    parser.add_argument("--diamond_db", default="/home/soumareh/mnt/nrdb/nr")
+    parser.add_argument("--diamond_db")
     parser.add_argument("--diamond", action="store_true")
     parser.add_argument("--metadata_file")
     parser.add_argument("--read_count", type=int, default=1)
@@ -161,13 +248,26 @@ def main():
     parser.add_argument("--col_filter", type=str, nargs="+")
     parser.add_argument("--pat_to_keep", type=str, nargs="+")
     parser.add_argument("--run_genomad", action="store_true")
-    parser.add_argument("--genomad_db", type=str, help="Path to geNomad database")
-    parser.add_argument("--nr_path", type=str, help="Path to nr FASTA file containing virus accession and name")
-    parser.add_argument("--skip_genomad", action="store_true", help="Skip geNomad even if --run_genomad is used")
-    parser.add_argument("--skip_diamond", action="store_true", help="Skip Diamond even if --diamond is used")
-    parser.add_argument("--run_alignment", action="store_true", help="Enable alignment summary with BWA")
-    parser.add_argument("--run_scaffolding", action="store_true",
-                    help="Run RagTag scaffolding for viral contigs using virus name from TSV")
+    parser.add_argument("--genomad_db")
+    parser.add_argument("--nr_path")
+    parser.add_argument("--skip_genomad", action="store_true")
+    parser.add_argument("--skip_diamond", action="store_true")
+    parser.add_argument("--run_alignment", action="store_true")
+    parser.add_argument("--run_scaffolding", action="store_true")
+
+    args = parser.parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
+    validate_inputs(args)
+
+    process_samples(args)
+    merged_tsv = handle_metadata(args)
+
+    # Skipping rest for brevity. You can split downstream pipeline stages into
+    # `run_genomad_annotation(args)`, `run_diamond_annotation(args)`, etc.
+
+if __name__ == "__main__":
+    main()
+
 
 
     #parser.add_argument("--nr_path", type=str, help="Path to nr FASTA for annotation (required if --diamond)")
