@@ -1,5 +1,3 @@
-
-
 #!/usr/bin/env python3
 """
 run_metagenomics_pl2.py
@@ -16,7 +14,7 @@ import sys
 import logging
 import subprocess
 import csv
-from Bio import SeqIO, Entrez
+from Bio import SeqIO
 from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
     process_sample,
     aggregate_kraken_results,
@@ -33,7 +31,7 @@ from Metagenomics_pipeline4_V2 import extract_contigs_diamond
 from Metagenomics_pipeline4_V2.alignment_summary import run_alignment_summary
 from Metagenomics_pipeline4_V2.extract_contigs_diamond import process_virus_contigs
 from Metagenomics_pipeline4_V2.process_clustered_contigs import process_clustered_contigs
-
+from Metagenomics_pipeline4_V2.scaffold_virus import scaffold_virus_contigs
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,94 +40,6 @@ logging.basicConfig(
         logging.FileHandler("metagenomics_pipeline.log"),
         logging.StreamHandler()
     ]
-)
-
-def create_sample_id_df(input_dir):
-    sample_ids = []
-    for f in glob.glob(os.path.join(input_dir, "*_R1*.fastq*")):
-        sid = os.path.basename(f)
-        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz",
-                    "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
-            sid = sid.replace(pat, "")
-        sample_ids.append(sid)
-    return pd.DataFrame(sample_ids, columns=["Sample_IDs"])
-
-def validate_inputs(args):
-    if not os.path.isdir(args.input_dir):
-        logging.error(f"Input directory '{args.input_dir}' not found.")
-        sys.exit(1)
-    if not os.path.isdir(args.kraken_db):
-        logging.error(f"Kraken DB '{args.kraken_db}' not found.")
-        sys.exit(1)
-    if args.bowtie2_index and not os.path.exists(args.bowtie2_index + ".1.bt2"):
-        logging.error(f"Bowtie2 index '{args.bowtie2_index}' not found.")
-        sys.exit(1)
-    if args.metadata_file and not os.path.isfile(args.metadata_file):
-        logging.error(f"Metadata file '{args.metadata_file}' not found.")
-        sys.exit(1)
-    if args.use_precomputed_reports and not glob.glob(os.path.join(args.output_dir, "*_report.txt")):
-        logging.error("No precomputed Kraken reports found in output directory")
-        sys.exit(1)
-    if args.run_genomad and not args.genomad_db:
-        logging.error("You must provide --genomad_db when using --run_genomad")
-        sys.exit(1)
-
-def process_samples(args):
-    run_bowtie = not args.no_bowtie2 and args.bowtie2_index is not None
-    for forward in glob.glob(os.path.join(args.input_dir, "*_R1*.fastq*")):
-        base = os.path.basename(forward)
-        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz",
-                    "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
-            base = base.replace(pat, "")
-        reverse = None
-        if not args.use_assembly or args.paired_assembly:
-            candidates = [
-                os.path.join(args.input_dir, f"{base}_R2_001.fastq.gz"),
-                os.path.join(args.input_dir, f"{base}_R2.fastq.gz"),
-                os.path.join(args.input_dir, f"{base}_R2.fastq")
-            ]
-            reverse = next((r for r in candidates if os.path.isfile(r)), None)
-            if not reverse and not args.use_assembly:
-                logging.warning(f"No R2 found for {base}, skipping.")
-                continue
-
-        logging.info(f"Processing sample {base} (assembly={args.use_assembly})")
-        process_sample(
-            forward=forward,
-            reverse=reverse,
-            base_name=base,
-            bowtie2_index=args.bowtie2_index,
-            kraken_db=args.kraken_db,
-            output_dir=args.output_dir,
-            threads=args.threads,
-            run_bowtie=run_bowtie,
-            use_precomputed_reports=args.use_precomputed_reports,
-            use_assembly=args.use_assembly,
-            skip_preprocessing=args.skip_preprocessing,
-            skip_existing=args.skip_existing
-        )
-
-def handle_metadata(args):
-    if args.no_metadata:
-        df = create_sample_id_df(args.input_dir)
-        df.to_csv(os.path.join(args.output_dir, "sample_ids.csv"), index=False)
-        return aggregate_kraken_results(
-            args.output_dir,
-            sample_id_df=df,
-            read_count=args.read_count,
-            max_read_count=args.max_read_count
-        )
-    return aggregate_kraken_results(
-        args.output_dir,
-        metadata_file=args.metadata_file,
-        read_count=args.read_count,
-        max_read_count=args.max_read_count
-    )
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler("metagenomics_pipeline.log"), logging.StreamHandler()]
 )
 
 def create_sample_id_df(input_dir):
@@ -258,14 +168,9 @@ def main():
     args = parser.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
     validate_inputs(args)
-
     process_samples(args)
     merged_tsv = handle_metadata(args)
-
-    # Skipping rest for brevity. You can split downstream pipeline stages into
-    # `run_genomad_annotation(args)`, `run_diamond_annotation(args)`, etc.
-
-if __name__ == "__main__":
+    if __name__ == "__main__":
     main()
 
 
@@ -551,6 +456,10 @@ if __name__ == "__main__":
                 ref_based(pd.read_csv(merged_tsv_file, sep="\t"), args.output_dir, args.input_dir, args.bowtie2_index, args.threads, "S")
             if args.run_deno_ref:
                 deno_ref_based(merged_tsv_file, args.output_dir, args.input_dir, args.threads, "S")
-
+    
+ 
+ 
+ 
 if __name__ == "__main__":
     main()
+
