@@ -257,7 +257,7 @@ def filter_and_merge(fasta_paths, min_length, output_path):
     print(f"✅ Wrote {len(records_to_write)} contigs ≥{min_length} bp to {output_path}")
 
 def cluster_contigs(virus_fasta: Path, output_dir: str, final_output: str = "clustered_contigs.fasta",
-                    identity: float = 0.95, word_size: int = 10,
+                    identity: float = 0.99, word_size: int = 10,
                     mem_mb: int = 16000, threads: int = 8) -> Path:
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
