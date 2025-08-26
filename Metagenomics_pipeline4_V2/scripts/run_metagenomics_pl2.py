@@ -168,6 +168,9 @@ def main():
     parser.add_argument("--run_alignment", action="store_true", help="Enable alignment summary with BWA")
     parser.add_argument("--run_scaffolding", action="store_true",
                     help="Run RagTag scaffolding for viral contigs using virus name from TSV")
+    parser.add_argument("--max_workers", type=int, default=5, help="Number of parallel alignment jobs")
+    parser.add_argument("--bwa_threads", type=int, default=4, help="Threads per BWA job")
+
 
 
     #parser.add_argument("--nr_path", type=str, help="Path to nr FASTA for annotation (required if --diamond)")
@@ -365,15 +368,17 @@ def main():
     if args.run_alignment:
      logging.info("🧬 Running alignment summary for viral contigs...")
      run_alignment_summary(
-        diamond_tsv=filtered_clusters_file,
-        merged_fasta=os.path.join(args.output_dir, "combined_contigs_for_clustering.fasta"),
-        fastq_dir=args.output_dir,
-        output_file=os.path.join(args.output_dir, "alignment_summary.tsv"),
-        tmp_dir=os.path.join(args.output_dir, "tmp_alignments"),
-        run_alignment=args.run_alignment,
-        threads=8,  # 👈 Use more threads if you have more CPUs
-        min_contig_len=500  # 👈 Only align contigs ≥ 500 bp
-    )
+    diamond_tsv=filtered_clusters_file,
+    merged_fasta=os.path.join(args.output_dir, "combined_contigs_for_clustering.fasta"),
+    fastq_dir=args.output_dir,
+    output_file=os.path.join(args.output_dir, "alignment_summary.tsv"),
+    tmp_dir=os.path.join(args.output_dir, "tmp_alignments"),
+    run_alignment=args.run_alignment,
+    max_workers=args.max_workers,            # ✅ Pass this from argparse
+    bwa_threads_per_job=args.bwa_threads,    # ✅ Also from argparse
+    min_contig_len=500
+)
+
 
 
     else:
