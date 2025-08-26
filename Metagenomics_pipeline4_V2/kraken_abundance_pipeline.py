@@ -17,6 +17,7 @@ from .fastp import run_fastp
 
 # Local imports
 #from .trimmomatic import run_trimmomatic
+from .fastp import run_fastp
 from .metaspades import run_spades
 from .bowtie2 import run_bowtie2
 from .kraken2 import run_kraken2
@@ -90,7 +91,6 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
             logging.warning(f"Skipping output analysis: {output_report} not found")
 
         return kraken_report, output_report
-
     except Exception as e:
         logging.error(f"Error processing sample {base_name}: {e}")
         return None, None
