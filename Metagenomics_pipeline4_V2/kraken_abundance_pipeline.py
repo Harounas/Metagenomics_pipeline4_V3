@@ -13,9 +13,10 @@ import subprocess
 import random
 from collections import defaultdict
 import plotly.express as px
+from .fastp import run_fastp
 
 # Local imports
-from .trimmomatic import run_trimmomatic
+#from .trimmomatic import run_trimmomatic
 from .metaspades import run_spades
 from .bowtie2 import run_bowtie2
 from .kraken2 import run_kraken2
@@ -52,7 +53,8 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
 
             if not skip_existing or not (os.path.exists(trimmed_forward) and os.path.exists(trimmed_reverse)):
                 logging.info(f"Running Trimmomatic for sample {base_name}")
-                run_trimmomatic(forward, reverse, base_name, output_dir, threads)
+                run_fastp(forward, reverse, base_name, output_dir, threads)
+
 
             unmapped_r1, unmapped_r2 = trimmed_forward, trimmed_reverse
             if run_bowtie:
