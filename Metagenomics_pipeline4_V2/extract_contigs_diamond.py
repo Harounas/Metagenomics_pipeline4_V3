@@ -373,19 +373,24 @@ def run_diamond(diamond_db: str,
 
 
 
+import os
+import re
+import pandas as pd
+
 def process_virus_contigs(fasta_file, diamond_results_file, output_dir):
     """
-    Processes virus annotations and DIAMOND BLASTX results to output annotated results per contig.
+    Processes DIAMOND BLASTX results and extracts the best viral hit per contig
+    using a custom scoring metric (coverage * identity * bit score).
 
     Args:
-        fasta_file (str): Path to the input FASTA file (e.g. "MNT/nr.fasta")
-        diamond_results_file (str): DIAMOND results .m8 format file path
-        output_dir (str): Directory to write outputs
+        fasta_file (str): Path to reference FASTA used in DIAMOND.
+        diamond_results_file (str): DIAMOND .m8 format result file.
+        output_dir (str): Output directory to save processed result.
     """
     os.makedirs(output_dir, exist_ok=True)
     virus_list_path = os.path.join(output_dir, "virus_list.tsv")
 
-    # Step 1: Generate virus list only if not already present
+    # Step 1: Extract virus names from FASTA
     if not os.path.exists(virus_list_path):
         print("Generating virus list from FASTA...")
         pattern = re.compile(r'^>(\S+).*?\[([^\]]*virus[^\]]*)\]', re.IGNORECASE)
@@ -397,43 +402,53 @@ def process_virus_contigs(fasta_file, diamond_results_file, output_dir):
                     accession = match.group(1)
                     virus_name = match.group(2)
                     outfile.write(f"{accession}\t{virus_name}\n")
-        print(f"Virus entries extracted to: {virus_list_path}")
+        print(f"Virus list saved to: {virus_list_path}")
     else:
-        print(f"Virus list already exists at: {virus_list_path}, skipping generation.")
+        print(f"Virus list exists at: {virus_list_path}, skipping.")
 
-    # Step 2: Process DIAMOND results and extract best hits per query
+    # Step 2: Load DIAMOND results
     df = pd.read_csv(diamond_results_file, sep='\t', header=None)
-    best_hits = df.loc[df.groupby(0)[11].idxmax()]
-
-    # Step 3: Load virus list and map subject IDs to virus names
-    virus_df = pd.read_csv(virus_list_path, sep='\t')
-    virus_map = dict(zip(virus_df['accession_number'], virus_df['virus_name']))
-    best_hits.columns = [
+    df.columns = [
         "query_id", "subject_id", "pident", "aln_len", "mismatches", "gaps",
         "qstart", "qend", "sstart", "send", "evalue", "bitscore"
     ]
+
+    # Step 3: Extract contig length from query_id
+    df['Sample_ID'] = df['query_id'].str.split('|').str[0]
+    contig_info = df['query_id'].str.split('|').str[-1]
+    df['contigs_len'] = pd.to_numeric(contig_info.str.extract(r'length_(\d+)')[0], errors='coerce')
+
+    # Step 4: Compute alignment coverage and score
+    #df['aln_cov'] = df['aln_len'] / df['contigs_len']
+    df['identity'] = df['pident'] / 100
+    df['bit_norm'] = df['bitscore'] / df['bitscore'].max()
+    df['aln_norm'] = df['aln_len'] / df['aln_len'].max()
+
+    df['score'] = df['aln_norm'] * df['identity'] * df['bit_norm']
+
+
+    # Step 5: Select best hit per query using score
+    best_hits = df.loc[df.groupby('query_id')['score'].idxmax()].copy()
+
+    # Step 6: Map virus name
+    virus_df = pd.read_csv(virus_list_path, sep='\t')
+    virus_map = dict(zip(virus_df['accession_number'], virus_df['virus_name']))
     best_hits['virus'] = best_hits['subject_id'].map(virus_map)
-    best_hits.drop(columns=["subject_id"], inplace=True)
 
-    # Step 4: Parse metadata from query ID
-    best_hits['Sample_ID'] = best_hits['query_id'].str.split('|').str[0]
-    contig_part = best_hits['query_id'].str.split('|').str[-1]
-    best_hits['contigs_len'] = pd.to_numeric(contig_part.str.split('_').str[3], errors='coerce')
+    # Step 7: Filter by contig length ≥ 500
+    best_hits = best_hits[best_hits['contigs_len'] >= 500]
 
-    # Step 5: Filter contigs >= 500 and reorder columns
-    filtered_df = best_hits[best_hits['contigs_len'] >= 500]
-    col_order = ['Sample_ID', 'contigs_len'] + [
-        "query_id", "pident", "aln_len", "mismatches", "gaps", "qstart", "qend",
-        "sstart", "send", "evalue", "bitscore", "virus"
+    # Step 8: Reorder and save
+    col_order = [
+        'Sample_ID', 'contigs_len', 'query_id', 'pident', 'aln_len', 'mismatches',
+        'gaps', 'qstart', 'qend', 'sstart', 'send', 'evalue', 'bitscore', 'virus'
     ]
-    filtered_df = filtered_df[col_order]
-
-    # Step 6: Write the result
     output_path = os.path.join(output_dir, 'diamond_results_contig_with_sampleid.tsv')
-    filtered_df.to_csv(output_path, sep='\t', index=False)
+    best_hits[col_order].to_csv(output_path, sep='\t', index=False)
     print(f"Final annotated results saved to: {output_path}")
 
     return output_path
+
 def process_diamond_results(results_file: str = "results.m8",
                             out_csv: str = "extracted_virus.csv",
                             sorted_csv: str = "extracted_virus_sorted.csv") -> None:
