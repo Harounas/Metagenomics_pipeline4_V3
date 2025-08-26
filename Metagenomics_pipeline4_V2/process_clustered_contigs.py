@@ -23,7 +23,7 @@ def process_clustered_contigs(clstr_file, diamond_tsv, output_dir):
 
     # Select representative and high-coverage members
     representatives = df[df["clstr_rep"] == 1]
-    high_cov_members = df[(df["clstr_rep"] == 0) & (df["clstr_cov"] >= 10)]
+    high_cov_members = df[(df["clstr_rep"] == 0) & (df["clstr_cov"] >= 5)]
     filtered = pd.concat([representatives, high_cov_members]).sort_values(
         by=["clstr", "clstr_rep"], ascending=[True, False]
     )
