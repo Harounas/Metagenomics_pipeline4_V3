@@ -1,3 +1,6 @@
+import os
+import subprocess
+
 def run_fastp(forward, reverse, base_name, output_dir, threads):
     """
     Runs fastp for quality trimming of FASTQ files.
