@@ -65,10 +65,11 @@ def process_clustered_contigs(clstr_file, diamond_tsv, output_dir):
 
     # Filter to viral contigs with qcov ≥ 70%
     filtered = filtered.rename(columns={"id": "query_id"})
-    filtered = filtered[
-        filtered['virus'].str.contains("virus", case=False, na=False) &
-        (filtered['qcov'] >= 70)
-    ]
+    filtered = filtered[filtered['virus'].str.contains("virus", case=False, na=False)]
+    #filtered = filtered[
+    #filtered['virus'].str.contains("virus", case=False, na=False) &
+      #  (filtered['qcov'] >= 70)
+   # ]
 
     # Output
     filtered_output_file = os.path.join(output_dir, "filtered_clusters_assigned_rep_virus.tsv")
