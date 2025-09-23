@@ -26,6 +26,8 @@ from .fastp import run_fastp
 from .metaspades import run_spades
 from .bowtie2 import run_bowtie2
 from .kraken2 import run_kraken2
+#from multiprocessing import Semaphore
+
 
 # ---------------- Logging ---------------- #
 logging.basicConfig(
@@ -140,7 +142,7 @@ def process_samples_in_parallel(samples, bowtie2_index, kraken_db, output_dir, t
     results = []
     assembly_semaphore = threading.Semaphore(max_assemblies)
 
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(
                 process_sample,
