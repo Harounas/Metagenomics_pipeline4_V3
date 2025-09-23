@@ -1,5 +1,3 @@
-
-
 #!/usr/bin/env python3
 """
 run_metagenomics_pl2.py
@@ -18,7 +16,8 @@ import subprocess
 import csv
 from Bio import SeqIO, Entrez
 from Metagenomics_pipeline4_V2.kraken_abundance_pipeline import (
-    process_sample,
+    process_samples_in_parallel,
+    find_samples,
     aggregate_kraken_results,
     generate_abundance_plots,
     run_multiqc,
@@ -74,40 +73,32 @@ def validate_inputs(args):
         logging.error("You must provide --genomad_db when using --run_genomad")
         sys.exit(1)
 
+# 🔹 Parallel sample processor
 def process_samples(args):
     run_bowtie = not args.no_bowtie2 and args.bowtie2_index is not None
-    for forward in glob.glob(os.path.join(args.input_dir, "*_R1*.fastq*")):
-        base = os.path.basename(forward)
-        for pat in ["_R1_001.fastq.gz", "_R1_001.fastq", "_R1.fastq.gz",
-                    "_R1.fastq", "R1.fastq.gz", "R1.fastq", "_R1_001", "_R1"]:
-            base = base.replace(pat, "")
-        reverse = None
-        if not args.use_assembly or args.paired_assembly:
-            candidates = [
-                os.path.join(args.input_dir, f"{base}_R2_001.fastq.gz"),
-                os.path.join(args.input_dir, f"{base}_R2.fastq.gz"),
-                os.path.join(args.input_dir, f"{base}_R2.fastq")
-            ]
-            reverse = next((r for r in candidates if os.path.isfile(r)), None)
-            if not reverse and not args.use_assembly:
-                logging.warning(f"No R2 found for {base}, skipping.")
-                continue
 
-        logging.info(f"Processing sample {base} (assembly={args.use_assembly})")
-        process_sample(
-            forward=forward,
-            reverse=reverse,
-            base_name=base,
-            bowtie2_index=args.bowtie2_index,
-            kraken_db=args.kraken_db,
-            output_dir=args.output_dir,
-            threads=args.threads,
-            run_bowtie=run_bowtie,
-            use_precomputed_reports=args.use_precomputed_reports,
-            use_assembly=args.use_assembly,
-            skip_preprocessing=args.skip_preprocessing,
-            skip_existing=args.skip_existing
-        )
+    samples = find_samples(args.input_dir)
+    if not samples:
+        logging.error("❌ No samples found in input directory.")
+        sys.exit(1)
+
+    logging.info(f"Found {len(samples)} samples. Running {args.parallel} jobs in parallel "
+                 f"(max {args.max_assemblies} SPAdes assemblies at once).")
+
+    process_samples_in_parallel(
+        samples,
+        bowtie2_index=args.bowtie2_index,
+        kraken_db=args.kraken_db,
+        output_dir=args.output_dir,
+        threads=args.threads,
+        run_bowtie=run_bowtie,
+        use_precomputed_reports=args.use_precomputed_reports,
+        use_assembly=args.use_assembly,
+        skip_preprocessing=args.skip_preprocessing,
+        skip_existing=args.skip_existing,
+        max_workers=args.parallel,
+        max_assemblies=args.max_assemblies
+    )
 
 def handle_metadata(args):
     if args.no_metadata:
@@ -134,7 +125,12 @@ def main():
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--input_dir", required=True)
     parser.add_argument("--bowtie2_index")
-    parser.add_argument("--threads", type=int, default=8)
+    parser.add_argument("--threads", type=int, default=8,
+                        help="Threads per sample job (fastp/Bowtie2/SPAdes/Kraken2)")
+    parser.add_argument("--parallel", type=int, default=2,
+                        help="Number of samples processed in parallel")
+    parser.add_argument("--max_assemblies", type=int, default=1,
+                        help="Max concurrent MetaSPAdes assemblies")
     parser.add_argument("--diamond_db", default="/home/soumareh/mnt/nrdb/nr")
     parser.add_argument("--diamond", action="store_true")
     parser.add_argument("--metadata_file")
@@ -163,22 +159,20 @@ def main():
     parser.add_argument("--run_genomad", action="store_true")
     parser.add_argument("--genomad_db", type=str, help="Path to geNomad database")
     parser.add_argument("--nr_path", type=str, help="Path to nr FASTA file containing virus accession and name")
-    parser.add_argument("--skip_genomad", action="store_true", help="Skip geNomad even if --run_genomad is used")
-    parser.add_argument("--skip_diamond", action="store_true", help="Skip Diamond even if --diamond is used")
-    parser.add_argument("--run_alignment", action="store_true", help="Enable alignment summary with BWA")
-    parser.add_argument("--run_scaffolding", action="store_true",
-                    help="Run RagTag scaffolding for viral contigs using virus name from TSV")
-    parser.add_argument("--max_workers", type=int, default=5, help="Number of parallel alignment jobs")
-    parser.add_argument("--bwa_threads", type=int, default=4, help="Threads per BWA job")
-
-
-
-    #parser.add_argument("--nr_path", type=str, help="Path to nr FASTA for annotation (required if --diamond)")
+    parser.add_argument("--skip_genomad", action="store_true")
+    parser.add_argument("--skip_diamond", action="store_true")
+    parser.add_argument("--run_alignment", action="store_true")
+    parser.add_argument("--run_scaffolding", action="store_true")
+    parser.add_argument("--max_workers", type=int, default=5,
+                        help="Number of parallel alignment jobs")
+    parser.add_argument("--bwa_threads", type=int, default=4,
+                        help="Threads per BWA job")
 
     args = parser.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
     validate_inputs(args)
 
+    # 🔹 Parallel sample execution
     process_samples(args)
     merged_tsv = handle_metadata(args)
 
@@ -186,9 +180,7 @@ def main():
         logging.info("Processing Kraken reports…")
         process_kraken_reports(args.output_dir)
         logging.info("Processing output reports…")
-        process_output_reports(args.output_dir)
-
-    
+        process_output_reports(args.output_dir) 
             
     if args.diamond and not args.skip_diamond:
         if args.use_assembly:
@@ -433,5 +425,9 @@ def main():
             if args.run_deno_ref:
                 deno_ref_based(merged_tsv_file, args.output_dir, args.input_dir, args.threads, "S")
 
+
+
+if not args.skip_multiqc:
+        run_multiqc(args.output_dir)
 if __name__ == "__main__":
     main()
