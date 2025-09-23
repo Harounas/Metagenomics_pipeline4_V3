@@ -427,7 +427,7 @@ def main():
 
 
 
-if not args.skip_multiqc:
+    if not args.skip_multiqc:
         run_multiqc(args.output_dir)
 if __name__ == "__main__":
     main()
