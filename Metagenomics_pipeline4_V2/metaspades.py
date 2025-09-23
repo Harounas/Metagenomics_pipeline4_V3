@@ -1,8 +1,10 @@
 import os
+import subprocess
+import logging
 
-def run_spades(forward, reverse, base_name, output_dir, threads):
+def run_spades(forward, reverse, base_name, output_dir, threads=8):
     """
-    Runs SPAdes for de novo assembly.
+    Runs MetaSPAdes for de novo assembly.
 
     Parameters:
     - forward (str): Path to forward reads.
@@ -14,16 +16,33 @@ def run_spades(forward, reverse, base_name, output_dir, threads):
     Returns:
     - str: Path to the assembled contigs file.
     """
-    contigs_output = os.path.join(output_dir, base_name, "contigs.fasta")
+    sample_outdir = os.path.join(output_dir, base_name)
+    contigs_output = os.path.join(sample_outdir, "contigs.fasta")
+
     if os.path.exists(contigs_output):
-        print(f"SPAdes assembly already exists for {base_name}. Using existing contigs.")
+        logging.info(f"[SKIP] SPAdes assembly already exists for {base_name}.")
         return contigs_output
 
-    spades_cmd = f"metaspades.py -1 {forward} -2 {reverse} -o {os.path.join(output_dir, base_name)} -t {threads}"
-    os.system(spades_cmd)
+    os.makedirs(sample_outdir, exist_ok=True)
+
+    cmd = [
+        "metaspades.py",
+        "-1", forward,
+        "-2", reverse,
+        "-o", sample_outdir,
+        "-t", str(threads)
+    ]
+
+    logging.info(f"[RUN] Running MetaSPAdes for {base_name}: {' '.join(cmd)}")
+
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"SPAdes failed for {base_name} (exit {e.returncode})") from e
 
     if os.path.exists(contigs_output):
-        print(f"Assembly complete for {base_name}. Contigs saved at {contigs_output}")
+        logging.info(f"[DONE] Assembly complete for {base_name}: {contigs_output}")
         return contigs_output
     else:
-        raise RuntimeError(f"SPAdes failed for {base_name}. No contigs.fasta found.")
+        raise RuntimeError(f"SPAdes finished but no contigs.fasta found for {base_name}")
+
