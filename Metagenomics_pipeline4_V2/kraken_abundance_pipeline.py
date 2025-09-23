@@ -26,6 +26,8 @@ from .fastp import run_fastp
 from .metaspades import run_spades
 from .bowtie2 import run_bowtie2
 from .kraken2 import run_kraken2
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 #from multiprocessing import Semaphore
 
 
