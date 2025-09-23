@@ -17,6 +17,7 @@ import pandas as pd
 import logging
 import subprocess
 import argparse
+import threading
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import plotly.express as px
 
@@ -36,7 +37,8 @@ logging.basicConfig(
 
 def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output_dir, threads,
                    run_bowtie=True, use_precomputed_reports=False, use_assembly=False,
-                   skip_preprocessing=False, skip_existing=False):
+                   skip_preprocessing=False, skip_existing=False,
+                   assembly_semaphore=None):
     """Run the full pipeline for a single sample."""
     try:
         kraken_report = os.path.join(output_dir, f"{base_name}_kraken_report.txt")
@@ -52,7 +54,11 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
             contigs_file = os.path.join(output_dir, f"{base_name}_contigs.fasta")
             if not (skip_existing and os.path.exists(contigs_file)):
                 logging.info(f"[{base_name}] Running SPAdes (skip_preprocessing)")
-                contigs_file = run_spades(forward, reverse, base_name, output_dir, threads)
+                if assembly_semaphore:
+                    with assembly_semaphore:
+                        contigs_file = run_spades(forward, reverse, base_name, output_dir, threads)
+                else:
+                    contigs_file = run_spades(forward, reverse, base_name, output_dir, threads)
             kraken_input = contigs_file
         else:
             trimmed_forward = os.path.join(output_dir, f"{base_name}_trimmed_R1.fastq.gz")
@@ -76,7 +82,11 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
                 contigs_file = os.path.join(output_dir, f"{base_name}_contigs.fasta")
                 if not (skip_existing and os.path.exists(contigs_file)):
                     logging.info(f"[{base_name}] Running SPAdes")
-                    contigs_file = run_spades(unmapped_r1, unmapped_r2, base_name, output_dir, threads)
+                    if assembly_semaphore:
+                        with assembly_semaphore:
+                            contigs_file = run_spades(unmapped_r1, unmapped_r2, base_name, output_dir, threads)
+                    else:
+                        contigs_file = run_spades(unmapped_r1, unmapped_r2, base_name, output_dir, threads)
                 kraken_input = contigs_file
             else:
                 kraken_input = unmapped_r1
@@ -113,9 +123,15 @@ def find_samples(input_dir):
 
 def process_samples_in_parallel(samples, bowtie2_index, kraken_db, output_dir, threads,
                                 run_bowtie=True, use_precomputed_reports=False, use_assembly=False,
-                                skip_preprocessing=False, skip_existing=False, max_workers=2):
-    """Run many samples in parallel with ProcessPoolExecutor."""
+                                skip_preprocessing=False, skip_existing=False,
+                                max_workers=2, max_assemblies=1):
+    """
+    Run many samples in parallel with ProcessPoolExecutor.
+    Limits concurrent MetaSPAdes jobs with a semaphore.
+    """
     results = []
+    assembly_semaphore = threading.Semaphore(max_assemblies)
+
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(
@@ -123,7 +139,7 @@ def process_samples_in_parallel(samples, bowtie2_index, kraken_db, output_dir, t
                 f, r, b,
                 bowtie2_index, kraken_db, output_dir, threads,
                 run_bowtie, use_precomputed_reports, use_assembly,
-                skip_preprocessing, skip_existing
+                skip_preprocessing, skip_existing, assembly_semaphore
             ): b for f, r, b in samples
         }
         for fut in as_completed(futures):
