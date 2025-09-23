@@ -112,15 +112,26 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
 # ---------------- Parallel wrapper ---------------- #
 
 def find_samples(input_dir):
-    """Find paired-end FASTQs (_R1/_R2)."""
+    """Find paired-end FASTQs with flexible R1/R2 naming conventions."""
     samples = []
-    for r1 in sorted(glob.glob(os.path.join(input_dir, "*_R1.fastq.gz"))):
-        r2 = r1.replace("_R1.fastq.gz", "_R2.fastq.gz")
-        if os.path.exists(r2):
-            base = os.path.basename(r1).replace("_R1.fastq.gz", "")
-            samples.append((r1, r2, base))
-    return samples
+    # patterns that cover Illumina + custom (SK_SN_GK_AB_GT_012_R1.fastq)
+    patterns = ["*_R1.fastq.gz", "*_R1.fastq", "*_R1_001.fastq.gz", "*_R1_001.fastq"]
 
+    for pat in patterns:
+        for r1 in sorted(glob.glob(os.path.join(input_dir, pat))):
+            # build possible R2 names
+            if r1.endswith(".gz"):
+                r2 = r1.replace("_R1", "_R2")
+            else:
+                r2 = r1.replace("_R1", "_R2")
+
+            if os.path.exists(r2):
+                base = os.path.basename(r1)
+                # strip any R1 suffix variants
+                for suffix in ["_R1.fastq.gz", "_R1.fastq", "_R1_001.fastq.gz", "_R1_001.fastq"]:
+                    base = base.replace(suffix, "")
+                samples.append((r1, r2, base))
+    return samples
 def process_samples_in_parallel(samples, bowtie2_index, kraken_db, output_dir, threads,
                                 run_bowtie=True, use_precomputed_reports=False, use_assembly=False,
                                 skip_preprocessing=False, skip_existing=False,
