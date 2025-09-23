@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-kraken_abundance_pipeline.py (Version 3 - Parallel)
+kraken_abundance_pipeline.py (Version 3 - Parallel + Full Helpers)
 
 Processes Kraken2 reports, generates abundance plots, aggregates results
 (with metadata or sample IDs), and supports quality control via MultiQC.
@@ -9,6 +9,7 @@ Supports:
   - Optional host depletion via Bowtie2
   - Optional assembly via MetaSPAdes
   - Parallel execution of multiple samples
+  - Backward-compatible helper functions (process_kraken_reports, etc.)
 """
 
 import os
@@ -16,7 +17,6 @@ import glob
 import pandas as pd
 import logging
 import subprocess
-import argparse
 import threading
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import plotly.express as px
@@ -125,10 +125,7 @@ def process_samples_in_parallel(samples, bowtie2_index, kraken_db, output_dir, t
                                 run_bowtie=True, use_precomputed_reports=False, use_assembly=False,
                                 skip_preprocessing=False, skip_existing=False,
                                 max_workers=2, max_assemblies=1):
-    """
-    Run many samples in parallel with ProcessPoolExecutor.
-    Limits concurrent MetaSPAdes jobs with a semaphore.
-    """
+    """Run many samples in parallel with ProcessPoolExecutor. Limits concurrent MetaSPAdes jobs."""
     results = []
     assembly_semaphore = threading.Semaphore(max_assemblies)
 
@@ -242,3 +239,29 @@ def run_multiqc(out_dir):
         logging.info("MultiQC complete.")
     except Exception as e:
         logging.error(f"MultiQC error: {e}")
+
+# ---------------- Backward compatibility helpers ---------------- #
+
+def process_kraken_reports(kraken_dir):
+    """Process all Kraken reports in a directory into domain-specific files."""
+    for fn in os.listdir(kraken_dir):
+        if fn.endswith("_kraken_report.txt"):
+            process_output_report(os.path.join(kraken_dir, fn), kraken_dir)
+
+def process_output_reports(kraken_dir):
+    """Process all *_output_report.txt files in a directory."""
+    for fn in os.listdir(kraken_dir):
+        if fn.endswith("_output_report.txt"):
+            process_output_report(os.path.join(kraken_dir, fn), kraken_dir)
+
+def generate_unfiltered_merged_tsv(kraken_dir, metadata_file=None, sample_id_df=None):
+    """Aggregate Kraken results across all samples with no read_count filtering."""
+    return aggregate_kraken_results(kraken_dir, metadata_file, sample_id_df, read_count=0)
+
+def process_all_ranks(kraken_dir, metadata_file=None, sample_id_df=None,
+                      read_count=1, max_read_count=10**30, top_N=None,
+                      col_filter=None, pat_to_keep=None):
+    """Aggregate results across all ranks and generate abundance plots."""
+    merged = generate_unfiltered_merged_tsv(kraken_dir, metadata_file, sample_id_df)
+    generate_abundance_plots(merged, top_N or 10, col_filter, pat_to_keep)
+    return merged
