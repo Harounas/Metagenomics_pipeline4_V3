@@ -125,8 +125,8 @@ def handle_metadata(args):
 # Truncated main() section and full Diamond + geNomad + scaffolding + alignment logic due to space.
 # Will continue in a follow-up script below.
 
-parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis")
-args = parser.parse_args()
+#parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis")
+#args = parser.parse_args()
 
 def main():
     parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis")
