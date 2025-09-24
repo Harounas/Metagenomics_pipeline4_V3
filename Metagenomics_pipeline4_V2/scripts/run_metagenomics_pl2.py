@@ -367,8 +367,8 @@ def main():
                 deno_ref_based(merged_tsv_file, args.output_dir, args.input_dir, args.threads, "S")
 
 
-if not args.skip_multiqc:
-        run_multiqc(args.output_dir)
+#if not args.skip_multiqc:
+        #run_multiqc(args.output_dir)
 
 if __name__ == "__main__":
     main()
