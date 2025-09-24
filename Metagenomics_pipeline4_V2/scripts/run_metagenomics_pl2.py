@@ -39,7 +39,7 @@ from Metagenomics_pipeline4_V2 import extract_contigs_diamond
 from Metagenomics_pipeline4_V2.alignment_summary import run_alignment_summary
 from Metagenomics_pipeline4_V2.extract_contigs_diamond import process_virus_contigs
 from Metagenomics_pipeline4_V2.process_clustered_contigs import process_clustered_contigs
-from Metagenomics_pipeline4_V2.scaffold_virus_contigs import scaffold_virus_contigs
+from Metagenomics_pipeline4_V2.virus_scaffolding import scaffold_virus_contigs
 
 logging.basicConfig(
     level=logging.INFO,
