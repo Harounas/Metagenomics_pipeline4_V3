@@ -199,80 +199,80 @@ def main():
         process_output_reports(args.output_dir)
 
     # ---------------- Diamond + geNomad ---------------- #
-if args.diamond and not args.skip_diamond:
-    if not args.nr_path:
-        logging.error("Missing --nr_path required for Diamond annotation.")
-        sys.exit(1)
+    if args.diamond and not args.skip_diamond:
+        if not args.nr_path:
+            logging.error("Missing --nr_path required for Diamond annotation.")
+            sys.exit(1)
 
-    if args.use_assembly:
-        logging.info("Running contig extraction and Diamond annotation…")
+        if args.use_assembly:
+            logging.info("Running contig extraction and Diamond annotation…")
 
         # Step 1: Extract long contigs from Kraken2 assemblies
-        long_contigs_tsv = os.path.join(args.output_dir, "long_contigs_summary.tsv")
-        long_contigs_fasta = os.path.join(args.output_dir, "long_contigs.fasta")
-        extract_contigs_diamond.extract_long_contigs_kraken(
+            long_contigs_tsv = os.path.join(args.output_dir, "long_contigs_summary.tsv")
+            long_contigs_fasta = os.path.join(args.output_dir, "long_contigs.fasta")
+            extract_contigs_diamond.extract_long_contigs_kraken(
             base_contigs_dir=args.output_dir,
             output_tsv=long_contigs_tsv
         )
 
         # Reformat long contigs FASTA
-        long_contigs_records = []
-        with open(long_contigs_tsv) as tsv_file:
-            reader = csv.DictReader(tsv_file, delimiter="\t")
-            for row in reader:
-                sample_id, gene_id = row['Sample_ID'], row['gene']
-                contig_path = os.path.join(args.output_dir, sample_id, "contigs.fasta")
-                if os.path.exists(contig_path):
-                    for rec in SeqIO.parse(contig_path, "fasta"):
-                        if rec.id == gene_id:
-                            rec.id = f"{sample_id}|{gene_id}"
-                            rec.description = ""
-                            long_contigs_records.append(rec)
-                            break
-        SeqIO.write(long_contigs_records, long_contigs_fasta, "fasta")
+            long_contigs_records = []
+            with open(long_contigs_tsv) as tsv_file:
+                reader = csv.DictReader(tsv_file, delimiter="\t")
+                for row in reader:
+                    sample_id, gene_id = row['Sample_ID'], row['gene']
+                    contig_path = os.path.join(args.output_dir, sample_id, "contigs.fasta")
+                    if os.path.exists(contig_path):
+                        for rec in SeqIO.parse(contig_path, "fasta"):
+                            if rec.id == gene_id:
+                                rec.id = f"{sample_id}|{gene_id}"
+                                rec.description = ""
+                                long_contigs_records.append(rec)
+                                break
+            SeqIO.write(long_contigs_records, long_contigs_fasta, "fasta")
 
-        if args.run_genomad and not args.skip_genomad:
+            if args.run_genomad and not args.skip_genomad:
             # Step 2: Run geNomad
-            genomad_input_fasta = os.path.join(args.output_dir, "merged_contigs_genomad.fasta")
-            genomad_out_dir = os.path.join(args.output_dir, "genomad_output")
-            extract_contigs_diamond.extract_and_merge_contigs_genomad(
-                base_contigs_dir=args.output_dir,
+                genomad_input_fasta = os.path.join(args.output_dir, "merged_contigs_genomad.fasta")
+                genomad_out_dir = os.path.join(args.output_dir, "genomad_output")
+                extract_contigs_diamond.extract_and_merge_contigs_genomad(
+                    base_contigs_dir=args.output_dir,
                 output_fasta=genomad_input_fasta
             )
-            genomad_output_viral_fasta = extract_contigs_diamond.run_genomad(
-                input_fasta=genomad_input_fasta,
+                genomad_output_viral_fasta = extract_contigs_diamond.run_genomad(
+                    input_fasta=genomad_input_fasta,
                 output_dir=genomad_out_dir,
                 genomad_db=args.genomad_db,
                 threads=args.threads
             )
-        else:
-            logging.warning("Skipping geNomad run; using only Kraken long contigs")
-            genomad_output_viral_fasta = long_contigs_fasta
+            else:
+                logging.warning("Skipping geNomad run; using only Kraken long contigs")
+                genomad_output_viral_fasta = long_contigs_fasta
 
         # Step 3: Merge contigs for clustering
-        combined_fasta_for_clustering = os.path.join(args.output_dir, "combined_contigs_for_clustering.fasta")
-        extract_contigs_diamond.filter_and_merge(
-            fasta_paths=[genomad_output_viral_fasta, long_contigs_fasta],
+            combined_fasta_for_clustering = os.path.join(args.output_dir, "combined_contigs_for_clustering.fasta")
+                extract_contigs_diamond.filter_and_merge(
+                fasta_paths=[genomad_output_viral_fasta, long_contigs_fasta],
             min_length=200,
             output_path=combined_fasta_for_clustering
         )
 
         # Step 4: Cluster and filter contigs
-        clustered_out_dir = os.path.join(args.output_dir, "clustered_output")
-        clustered_fasta = extract_contigs_diamond.cluster_contigs(
+            clustered_out_dir = os.path.join(args.output_dir, "clustered_output")
+            clustered_fasta = extract_contigs_diamond.cluster_contigs(
             virus_fasta=combined_fasta_for_clustering,
             output_dir=clustered_out_dir,
             threads=args.threads
         )
-        final_long_clustered_fasta = os.path.join(args.output_dir, "clustered_long_contigs.fasta")
-        extract_contigs_diamond.extract_long_contigs(
+            final_long_clustered_fasta = os.path.join(args.output_dir, "clustered_long_contigs.fasta")
+            extract_contigs_diamond.extract_long_contigs(
             input_fasta=clustered_fasta,
             output_fasta=final_long_clustered_fasta
         )
 
         # Step 5: Run Diamond
-        diamond_result_file = os.path.join(args.output_dir, "results_clustered.m8")
-        extract_contigs_diamond.run_diamond(
+            diamond_result_file = os.path.join(args.output_dir, "results_clustered.m8")
+            extract_contigs_diamond.run_diamond(
             diamond_db=args.diamond_db,
             query_file=final_long_clustered_fasta,
             output_file=diamond_result_file,
@@ -280,15 +280,15 @@ if args.diamond and not args.skip_diamond:
         )
 
         # Step 6: Process Diamond annotations
-        processed_output = process_virus_contigs(
+            processed_output = process_virus_contigs(
             fasta_file=args.nr_path,
             diamond_results_file=diamond_result_file,
             output_dir=args.output_dir
         )
+        else:
+            logging.warning("Diamond requested but --use_assembly not provided. Skipping contig analysis.")
     else:
-        logging.warning("Diamond requested but --use_assembly not provided. Skipping contig analysis.")
-else:
-    logging.info("⚠️ Skipping Diamond step as requested.")
+        logging.info("⚠️ Skipping Diamond step as requested.")
 
 
     if not args.skip_multiqc:
