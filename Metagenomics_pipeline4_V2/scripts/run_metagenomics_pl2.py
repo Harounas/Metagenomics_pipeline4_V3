@@ -126,8 +126,7 @@ def handle_metadata(args):
 # Will continue in a follow-up script below.
 
 
-
-
+args = parser.parse_args()
 def main():
     parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis")
     # [Arguments truncated for brevity — same as part 1, must be consistent]
