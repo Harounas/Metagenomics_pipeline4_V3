@@ -131,7 +131,7 @@ def handle_metadata(args):
 def main():
     parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis")
     # [Arguments truncated for brevity — same as part 1, must be consistent]
-     parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis")
+     #parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis")
 
     # Input/Output
     parser.add_argument("--input_dir", required=True, help="Directory with input FASTQ files")
