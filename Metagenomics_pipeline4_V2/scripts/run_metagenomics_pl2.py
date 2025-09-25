@@ -249,7 +249,7 @@ def main():
             combined_fasta_for_clustering = os.path.join(args.output_dir, "combined_contigs_for_clustering.fasta")
             extract_contigs_diamond.filter_and_merge(
                 fasta_paths=[genomad_output_viral_fasta, long_contigs_fasta],
-                min_length=200,
+                min_length=500,
                 output_path=combined_fasta_for_clustering
             )
 
