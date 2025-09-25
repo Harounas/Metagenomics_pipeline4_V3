@@ -89,7 +89,7 @@ def extract_long_contigs_kraken(base_contigs_dir, output_tsv="long_contigs_summa
                 for cid in contig_ids:
                     if cid in contig_dict:
                         rec = contig_dict[cid]
-                        if len(rec.seq) >= 200:
+                        if len(rec.seq) >= 500:
                             new_id = f"{sample_id}_{cid}"
                             new_rec = SeqRecord(rec.seq, id=new_id, description="")
                             all_long_seqs.append(new_rec)
@@ -171,13 +171,13 @@ def extract_short_contigs_kraken(base_contigs_dir, output_tsv="short_contigs_sum
                     vname = taxon_map[tid]
                     for cid, clen in zip(cids, lengths):
                         writer.writerow([sample_id, cid, clen, vname])
-                    print(f"{sample_id} • {vname}: all contigs ≤ {max(lengths)} bp")
+                    print(f"{sample_id} • {vname}: all contigs ≤ {max(lengths)} bp") 
 
     print(f"\nDone! Summary written to {output_tsv}")
 
 def extract_and_merge_contigs_genomad(base_contigs_dir: str,
                               output_fasta: str = "merged_contigs_genomad.fasta",
-                              min_length: int = 200) -> None:
+                              min_length: int = 500) -> None:
 
     #Extracts contigs > min_length bp from each sample's contigs.fasta
     #under base_contigs_dir and merges them into a single FASTA.
@@ -321,7 +321,7 @@ def run_genomad_and_cluster(input_fasta: str,
 
 def extract_long_contigs(input_fasta: str,
                           output_fasta: str,
-                          min_length: int = 200) -> None:
+                          min_length: int = 500) -> None:
     """
     Extracts contigs longer than min_length from the clustered contigs FASTA
     produced by run_genomad_and_cluster. Writes output to output_fasta.
