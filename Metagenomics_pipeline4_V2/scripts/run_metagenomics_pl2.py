@@ -72,6 +72,13 @@ def validate_inputs(args):
     if args.bowtie2_index and not os.path.exists(args.bowtie2_index + ".1.bt2"):
         logging.error(f"Bowtie2 index '{args.bowtie2_index}' not found.")
         sys.exit(1)
+    if args.bowtie2_index:
+       bt2 = args.bowtie2_index + ".1.bt2"
+       bt2l = args.bowtie2_index + ".1.bt2l"
+       if not (os.path.exists(bt2) or os.path.exists(bt2l)):
+         logging.error(f"Bowtie2 index '{args.bowtie2_index}' not found (.bt2 or .bt2l).")
+         sys.exit(1)
+  
     if args.metadata_file and not os.path.isfile(args.metadata_file):
         logging.error(f"Metadata file '{args.metadata_file}' not found.")
         sys.exit(1)
