@@ -69,9 +69,7 @@ def validate_inputs(args):
     if not os.path.isdir(args.kraken_db):
         logging.error(f"Kraken DB '{args.kraken_db}' not found.")
         sys.exit(1)
-    if args.bowtie2_index and not os.path.exists(args.bowtie2_index + ".1.bt2"):
-        logging.error(f"Bowtie2 index '{args.bowtie2_index}' not found.")
-        sys.exit(1)
+   
     if args.bowtie2_index:
       bt2 = args.bowtie2_index + ".1.bt2"
       bt2l = args.bowtie2_index + ".1.bt2l"
