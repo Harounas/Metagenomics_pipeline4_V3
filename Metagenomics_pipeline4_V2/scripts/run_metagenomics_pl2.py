@@ -255,7 +255,7 @@ def main():
             combined_fasta_for_clustering = os.path.join(args.output_dir, "combined_contigs_for_clustering.fasta")
             extract_contigs_diamond.filter_and_merge(
                 fasta_paths=[genomad_output_viral_fasta, long_contigs_fasta],
-                min_length=500,
+                min_length=200,
                 output_path=combined_fasta_for_clustering
             )
 
@@ -321,7 +321,7 @@ def main():
                     run_alignment=args.run_alignment,
                     max_workers=args.max_workers,
                     bwa_threads_per_job=args.bwa_threads,
-                    min_contig_len=500
+                    min_contig_len=200
                 )
         else:
             logging.warning("Diamond requested but --use_assembly not provided. Skipping contig analysis.")
