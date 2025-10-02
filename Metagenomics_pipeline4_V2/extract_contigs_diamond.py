@@ -89,7 +89,7 @@ def extract_long_contigs_kraken(base_contigs_dir, output_tsv="long_contigs_summa
                 for cid in contig_ids:
                     if cid in contig_dict:
                         rec = contig_dict[cid]
-                        if len(rec.seq) >= 500:
+                        if len(rec.seq) >= 200:
                             new_id = f"{sample_id}_{cid}"
                             new_rec = SeqRecord(rec.seq, id=new_id, description="")
                             all_long_seqs.append(new_rec)
@@ -167,7 +167,7 @@ def extract_short_contigs_kraken(base_contigs_dir, output_tsv="short_contigs_sum
             # 4. Emit short contigs
             for tid, cids in contig_hits.items():
                 lengths = [length_map.get(cid, 0) for cid in cids]
-                if lengths and max(lengths) < 500:
+                if lengths and max(lengths) < 200:
                     vname = taxon_map[tid]
                     for cid, clen in zip(cids, lengths):
                         writer.writerow([sample_id, cid, clen, vname])
@@ -177,7 +177,7 @@ def extract_short_contigs_kraken(base_contigs_dir, output_tsv="short_contigs_sum
 
 def extract_and_merge_contigs_genomad(base_contigs_dir: str,
                               output_fasta: str = "merged_contigs_genomad.fasta",
-                              min_length: int = 500) -> None:
+                              min_length: int = 200) -> None:
 
     #Extracts contigs > min_length bp from each sample's contigs.fasta
     #under base_contigs_dir and merges them into a single FASTA.
@@ -425,7 +425,7 @@ def process_virus_contigs(fasta_file, diamond_results_file, output_dir):
     best_hits['virus'] = best_hits['subject_id'].map(virus_map)
 
     # Step 7: Filter by contig length ≥ 500
-    best_hits = best_hits[best_hits['contigs_len'] >= 500]
+    best_hits = best_hits[best_hits['contigs_len'] >= 200]
 
     # Step 8: Reorder and save
     col_order = [
