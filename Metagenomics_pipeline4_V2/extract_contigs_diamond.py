@@ -11,24 +11,20 @@ from pathlib import Path
 import subprocess
 import pandas as pd
 from Bio import SeqIO, Entrez
-import sys
+from Bio.SeqRecord import SeqRecord
+import sys, os, re, csv
+
+# Fix for Kraken2 long field error
+csv.field_size_limit(sys.maxsize)
 
 # Set your email for NCBI Entrez usage
 Entrez.email = "harounasoum17@gmail.com"
 
 
-import csv
-from Bio import SeqIO
-from Bio.SeqRecord import SeqRecord
-import os
-import re
-
 def extract_long_contigs_kraken(base_contigs_dir, output_tsv="long_contigs_summary.tsv") -> Path:
     """
-    Extract viral contigs with length ≥500 bp from Kraken2 output.
+    Extract viral contigs with length ≥200 bp from Kraken2 output.
     """
-    from Bio import SeqIO
-
     allowed_ranks = {"F", "F1", "F2", "G", "G1", "G2", "S", "S1", "S2"}
     base_dir = Path(base_contigs_dir)
     output_dir = base_dir / "long_contigs"
@@ -52,30 +48,36 @@ def extract_long_contigs_kraken(base_contigs_dir, output_tsv="long_contigs_summa
 
             # 1. Build taxid → virus name map
             taxon_map = {}
-            with open(report) as rf:
-                reader = csv.reader(rf, delimiter="\t")
-                for row in reader:
-                    if len(row) < 6 or row[3].strip() not in allowed_ranks:
+            try:
+                df_report = pd.read_csv(report, sep="\t", header=None, engine="python")
+                for _, row in df_report.iterrows():
+                    if len(row) < 6 or str(row[3]).strip() not in allowed_ranks:
                         continue
-                    taxid = row[4].strip()
-                    name = row[5].strip().replace(" ", "_")
+                    taxid = str(row[4]).strip()
+                    name = str(row[5]).strip().replace(" ", "_")
                     if any(tok in name.lower() for tok in ("virus", "virinae", "viridae")):
                         taxon_map[taxid] = name
+            except Exception as e:
+                print(f"⚠️ Error reading {report}: {e}")
+                continue
 
             if not taxon_map:
                 continue
 
             # 2. Map taxid → list of contig IDs
             contig_hits = {}
-            with open(kout) as kf:
-                reader = csv.reader(kf, delimiter="\t")
-                for row in reader:
+            try:
+                df_kout = pd.read_csv(kout, sep="\t", header=None, engine="python")
+                for _, row in df_kout.iterrows():
                     if len(row) < 3:
                         continue
-                    cid, info = row[1].strip(), row[2]
+                    cid, info = str(row[1]).strip(), str(row[2])
                     for tid in taxon_map:
                         if f"taxid {tid}" in info:
                             contig_hits.setdefault(tid, []).append(cid)
+            except Exception as e:
+                print(f"⚠️ Error reading {kout}: {e}")
+                continue
 
             if not contig_hits:
                 continue
@@ -100,91 +102,78 @@ def extract_long_contigs_kraken(base_contigs_dir, output_tsv="long_contigs_summa
     print(f"✅ Merged long Kraken contigs saved to: {output_fasta}")
     return output_fasta
 
-# Example usage
-#extract_long_contigs(".", output_tsv="long_contigs_summary.tsv")
-
 
 def extract_short_contigs_kraken(base_contigs_dir, output_tsv="short_contigs_summary.tsv"):
     """
-    For each sample and each virus taxon:
-      - find all contigs assigned by Kraken2
-      - compute each contig’s length from contigs.fasta
-      - if the largest contig length < 500 bp, emit all contigs for that virus
-        into a TSV [sample_id, contig_id, contig_length, virus_name]
-    Expects files under base_contigs_dir:
-      - {sample_id}_Viruses_kraken_report.txt
-      - {sample_id}_kraken2_output.txt
-      - {sample_id}/contigs.fasta
+    Extract viral contigs ≤500 bp from Kraken2 output.
     """
     allowed_ranks = {"F", "F1", "F2", "G", "G1", "G2", "S", "S1", "S2"}
     base_dir = Path(base_contigs_dir)
     header = ["Sample_ID", "gene", "contig_length", "taxname"]
-    
+
     with open(output_tsv, "w", newline="") as out_f:
         writer = csv.writer(out_f, delimiter="\t")
         writer.writerow(header)
 
-        # iterate through each sample’s virus-only Kraken report
         for report in base_dir.glob("*_Viruses_kraken_report.txt"):
             sample_id = report.stem.replace("_Viruses_kraken_report", "")
             kout = base_dir / f"{sample_id}_kraken2_output.txt"
             contigs_fa = base_dir / sample_id / "contigs.fasta"
 
-            # skip if any required file is missing
             if not (report.exists() and kout.exists() and contigs_fa.exists()):
                 print(f"Skipping {sample_id}: missing files.")
                 continue
 
-            # 1) build taxon_id → virus_name map
+            # 1. Build taxon map
             taxon_map = {}
-            with open(report) as rf:
-                reader = csv.reader(rf, delimiter="\t")
-                for row in reader:
-                    if len(row) < 6 or row[3] not in allowed_ranks:
+            try:
+                df_report = pd.read_csv(report, sep="\t", header=None, engine="python")
+                for _, row in df_report.iterrows():
+                    if len(row) < 6 or str(row[3]) not in allowed_ranks:
                         continue
-                    taxid = row[4].strip()
-                    name = row[5].strip().replace(" ", "_")
-                    if any(tok in name.lower() for tok in ("virus","virinae","viridae")):
+                    taxid = str(row[4]).strip()
+                    name = str(row[5]).strip().replace(" ", "_")
+                    if any(tok in name.lower() for tok in ("virus", "virinae", "viridae")):
                         taxon_map[taxid] = name
+            except Exception as e:
+                print(f"⚠️ Error reading {report}: {e}")
+                continue
 
             if not taxon_map:
                 continue
 
-            # 2) build taxon_id → list of contig IDs from Kraken2 output
+            # 2. Map contigs
             contig_hits = {}
-            with open(kout) as kf:
-                reader = csv.reader(kf, delimiter="\t")
-                for row in reader:
+            try:
+                df_kout = pd.read_csv(kout, sep="\t", header=None, engine="python")
+                for _, row in df_kout.iterrows():
                     if len(row) < 3:
                         continue
-                    cid, info = row[1].strip(), row[2]
+                    cid, info = str(row[1]).strip(), str(row[2])
                     for tid in taxon_map:
                         if f"taxid {tid}" in info:
                             contig_hits.setdefault(tid, []).append(cid)
+            except Exception as e:
+                print(f"⚠️ Error reading {kout}: {e}")
+                continue
 
             if not contig_hits:
                 continue
 
-            # 3) parse contigs.fasta once into a dict of lengths
-            length_map = {rec.id: len(rec.seq) 
+            # 3. Parse contig lengths
+            length_map = {rec.id: len(rec.seq)
                           for rec in SeqIO.parse(str(contigs_fa), "fasta")}
 
-
-            # 4) for each virus, check max length < 500
+            # 4. Emit short contigs
             for tid, cids in contig_hits.items():
                 lengths = [length_map.get(cid, 0) for cid in cids]
-                if not lengths:
-                    continue
-                if max(lengths) < 500:
+                if lengths and max(lengths) < 200:
                     vname = taxon_map[tid]
                     for cid, clen in zip(cids, lengths):
                         writer.writerow([sample_id, cid, clen, vname])
-                    print(f"{sample_id} • {vname}: all contigs ≤ {max(lengths)} bp")
+                    print(f"{sample_id} • {vname}: all contigs ≤ {max(lengths)} bp") 
 
     print(f"\nDone! Summary written to {output_tsv}")
-
-#extract_short_contigs(".")
-
 
 def extract_and_merge_contigs_genomad(base_contigs_dir: str,
                               output_fasta: str = "merged_contigs_genomad.fasta",
@@ -332,7 +321,7 @@ def run_genomad_and_cluster(input_fasta: str,
 
 def extract_long_contigs(input_fasta: str,
                           output_fasta: str,
-                          min_length: int = 200) -> None:
+                          min_length: int = 500) -> None:
     """
     Extracts contigs longer than min_length from the clustered contigs FASTA
     produced by run_genomad_and_cluster. Writes output to output_fasta.
@@ -436,7 +425,7 @@ def process_virus_contigs(fasta_file, diamond_results_file, output_dir):
     best_hits['virus'] = best_hits['subject_id'].map(virus_map)
 
     # Step 7: Filter by contig length ≥ 500
-    best_hits = best_hits[best_hits['contigs_len'] >= 500]
+    best_hits = best_hits[best_hits['contigs_len'] >= 200]
 
     # Step 8: Reorder and save
     col_order = [
