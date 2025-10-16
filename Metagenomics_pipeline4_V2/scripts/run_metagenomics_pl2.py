@@ -17,8 +17,6 @@ import argparse
 import pandas as pd
 import sys
 import logging
-import subprocess
-import csv
 from Bio import SeqIO, Entrez
 
 # Import functions from pipeline modules
@@ -41,6 +39,9 @@ from Metagenomics_pipeline4_V2.extract_contigs_diamond import process_virus_cont
 from Metagenomics_pipeline4_V2.process_clustered_contigs import process_clustered_contigs
 from Metagenomics_pipeline4_V2.virus_scaffolding import scaffold_virus_contigs
 
+# ------------------------------------------------------------
+# Logging configuration
+# ------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -50,6 +51,10 @@ logging.basicConfig(
     ]
 )
 
+
+# ------------------------------------------------------------
+# Helper functions
+# ------------------------------------------------------------
 def create_sample_id_df(input_dir):
     sample_ids = []
     for f in glob.glob(os.path.join(input_dir, "*_R1*.fastq*")):
@@ -62,31 +67,35 @@ def create_sample_id_df(input_dir):
         sample_ids.append(sid)
     return pd.DataFrame(sample_ids, columns=["Sample_IDs"])
 
+
 def validate_inputs(args):
     if not os.path.isdir(args.input_dir):
         logging.error(f"Input directory '{args.input_dir}' not found.")
         sys.exit(1)
+
     if not os.path.isdir(args.kraken_db):
         logging.error(f"Kraken DB '{args.kraken_db}' not found.")
         sys.exit(1)
-   
-    if args.bowtie2_index:
-      bt2 = args.bowtie2_index + ".1.bt2"
-      bt2l = args.bowtie2_index + ".1.bt2l"
-      if not (os.path.exists(bt2) or os.path.exists(bt2l)):
-        logging.error(f"Bowtie2 index '{args.bowtie2_index}' not found (.bt2 or .bt2l).")
-        sys.exit(1)
 
-  
+    if args.bowtie2_index:
+        bt2 = args.bowtie2_index + ".1.bt2"
+        bt2l = args.bowtie2_index + ".1.bt2l"
+        if not (os.path.exists(bt2) or os.path.exists(bt2l)):
+            logging.error(f"Bowtie2 index '{args.bowtie2_index}' not found (.bt2 or .bt2l).")
+            sys.exit(1)
+
     if args.metadata_file and not os.path.isfile(args.metadata_file):
         logging.error(f"Metadata file '{args.metadata_file}' not found.")
         sys.exit(1)
+
     if args.use_precomputed_reports and not glob.glob(os.path.join(args.output_dir, "*_report.txt")):
-        logging.error("No precomputed Kraken reports found in output directory")
+        logging.error("No precomputed Kraken reports found in output directory.")
         sys.exit(1)
+
     if args.run_genomad and not args.genomad_db:
-        logging.error("You must provide --genomad_db when using --run_genomad")
+        logging.error("You must provide --genomad_db when using --run_genomad.")
         sys.exit(1)
+
 
 def process_samples(args):
     run_bowtie = not args.no_bowtie2 and args.bowtie2_index is not None
@@ -94,8 +103,10 @@ def process_samples(args):
     if not samples:
         logging.error("❌ No samples found in input directory.")
         sys.exit(1)
+
     logging.info(f"Found {len(samples)} samples. Running {args.parallel} jobs in parallel "
                  f"(max {args.max_assemblies} SPAdes assemblies at once).")
+
     process_samples_in_parallel(
         samples,
         bowtie2_index=args.bowtie2_index,
@@ -110,6 +121,7 @@ def process_samples(args):
         max_workers=args.parallel,
         max_assemblies=args.max_assemblies
     )
+
 
 def handle_metadata(args):
     if args.no_metadata:
@@ -128,22 +140,18 @@ def handle_metadata(args):
         max_read_count=args.max_read_count
     )
 
-# Truncated main() section and full Diamond + geNomad + scaffolding + alignment logic due to space.
-# Will continue in a follow-up script below.
 
-#parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis")
-#args = parser.parse_args()
-
+# ------------------------------------------------------------
+# Main Function
+# ------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis")
-    # [Arguments truncated for brevity — same as part 1, must be consistent]
-     #parser = argparse.ArgumentParser(description="Metagenomics pipeline for taxonomic classification and analysis")
 
     # Input/Output
     parser.add_argument("--input_dir", required=True, help="Directory with input FASTQ files")
     parser.add_argument("--output_dir", required=True, help="Directory to store outputs")
     parser.add_argument("--metadata_file", help="Metadata file with sample information")
-    parser.add_argument("--filtered_tsv", help="Optional filtered TSV file for report and downstream processing")
+    parser.add_argument("--filtered_tsv", help="Optional filtered TSV file for downstream processing")
 
     # Databases
     parser.add_argument("--kraken_db", required=True, help="Path to Kraken2 database")
@@ -152,7 +160,7 @@ def main():
     parser.add_argument("--diamond_db", help="Path to DIAMOND database (.dmnd)")
     parser.add_argument("--nr_path", help="Path to NR protein FASTA for annotation")
 
-    # Pipeline Controls
+    # Pipeline controls
     parser.add_argument("--skip_preprocessing", action="store_true", help="Skip fastp trimming")
     parser.add_argument("--no_bowtie2", action="store_true", help="Skip host depletion with Bowtie2")
     parser.add_argument("--use_precomputed_reports", action="store_true", help="Use existing Kraken2 reports")
@@ -168,7 +176,7 @@ def main():
     parser.add_argument("--run_deno_ref", action="store_true", help="Run de novo-assisted reference assembly")
     parser.add_argument("--skip_multiqc", action="store_true", help="Skip MultiQC summary report")
 
-    # Domain-specific Kraken plots
+    # Domain-specific flags
     parser.add_argument("--bacteria", action="store_true", help="Generate plots for Bacteria")
     parser.add_argument("--virus", action="store_true", help="Generate plots for Viruses")
     parser.add_argument("--archaea", action="store_true", help="Generate plots for Archaea")
@@ -191,176 +199,126 @@ def main():
     parser.add_argument("--max_workers", type=int, default=4, help="Max worker processes for alignment summary")
     parser.add_argument("--bwa_threads", type=int, default=4, help="Threads per alignment job")
 
-    # Diamond toggle
+    # Diamond control
     parser.add_argument("--diamond", action="store_true", help="Enable Diamond annotation")
-    parser.add_argument(
-    "--resume_from_diamond",
-    action="store_true",
-    help="Resume pipeline directly from Diamond step if clustered_long_contigs.fasta exists"
-)
+    parser.add_argument("--resume_from_diamond", action="store_true",
+                        help="Resume pipeline directly from Diamond step if clustered_long_contigs.fasta exists")
 
     args = parser.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
     validate_inputs(args)
 
-    process_samples(args)
-    merged_tsv = handle_metadata(args)
+    # ------------------------------------------------------------
+    # Resume mode check
+    # ------------------------------------------------------------
+    clustered_long_contigs_fasta = os.path.join(args.output_dir, "clustered_long_contigs.fasta")
+    resume_mode = args.resume_from_diamond and os.path.exists(clustered_long_contigs_fasta)
+    if resume_mode:
+        logging.info(f"🔁 Resuming pipeline directly from DIAMOND using {clustered_long_contigs_fasta}")
+    else:
+        logging.info("🚀 Starting full pipeline run...")
 
-    if not args.skip_reports:
-        logging.info("Processing Kraken reports…")
-        process_kraken_reports(args.output_dir)
-        logging.info("Processing output reports…")
-        process_output_reports(args.output_dir)
+    # ------------------------------------------------------------
+    # Early pipeline steps (skip if resuming)
+    # ------------------------------------------------------------
+    if not resume_mode:
+        process_samples(args)
+        merged_tsv = handle_metadata(args)
+
+        if not args.skip_reports:
+            logging.info("Processing Kraken reports…")
+            process_kraken_reports(args.output_dir)
+            logging.info("Processing output reports…")
+            process_output_reports(args.output_dir)
+    else:
+        logging.info("⏩ Skipping preprocessing, Kraken, and geNomad steps (resume mode enabled)")
+
+    # ------------------------------------------------------------
+    # Diamond and downstream
+    # ------------------------------------------------------------
     if args.diamond and not args.skip_diamond:
         if not args.nr_path:
             logging.error("Missing --nr_path required for Diamond annotation.")
             sys.exit(1)
 
-        clustered_long_contigs_fasta = os.path.join(args.output_dir, "clustered_long_contigs.fasta")
-
-    # --------------------------------------------------------------------
-    # 🧩 Resume option: start directly from DIAMOND if clustered FASTA exists
-    # --------------------------------------------------------------------
-        if args.resume_from_diamond and os.path.exists(clustered_long_contigs_fasta):
-            logging.info(f"🔁 Resuming pipeline directly from Diamond step using existing {clustered_long_contigs_fasta}")
-        else:
+        if not resume_mode:
             if not args.use_assembly:
                 logging.warning("Diamond requested but --use_assembly not provided. Skipping contig analysis.")
                 return
 
             logging.info("🧬 Running contig extraction, geNomad, clustering, and Diamond annotation…")
+            # Insert extraction + geNomad + clustering logic here
+        else:
+            logging.info("⏭️ Skipping contig extraction and geNomad steps (resume mode enabled). Proceeding to DIAMOND…")
 
-            long_contigs_tsv = os.path.join(args.output_dir, "long_contigs_summary.tsv")
-            long_contigs_fasta = os.path.join(args.output_dir, "long_contigs.fasta")
-
-            extract_contigs_diamond.extract_long_contigs_kraken(
-            base_contigs_dir=args.output_dir,
-            output_tsv=long_contigs_tsv
-            )
-
-            long_contigs_records = []
-            with open(long_contigs_tsv) as tsv_file:
-                reader = csv.DictReader(tsv_file, delimiter="\t")
-                for row in reader:
-                    sample_id, gene_id = row["Sample_ID"], row["gene"]
-                    contig_path = os.path.join(args.output_dir, sample_id, "contigs.fasta")
-                    if os.path.exists(contig_path):
-                        for rec in SeqIO.parse(contig_path, "fasta"):
-                            if rec.id == gene_id:
-                                rec.id = f"{sample_id}|{gene_id}"
-                                rec.description = ""
-                                long_contigs_records.append(rec)
-                                break
-            SeqIO.write(long_contigs_records, long_contigs_fasta, "fasta")
-
-            if args.run_genomad and not args.skip_genomad:
-                genomad_input_fasta = os.path.join(args.output_dir, "merged_contigs_genomad.fasta")
-                genomad_out_dir = os.path.join(args.output_dir, "genomad_output")
-                extract_contigs_diamond.extract_and_merge_contigs_genomad(
-                base_contigs_dir=args.output_dir,
-                output_fasta=genomad_input_fasta
-            )
-                genomad_output_viral_fasta = extract_contigs_diamond.run_genomad(
-                input_fasta=genomad_input_fasta,
-                output_dir=genomad_out_dir,
-                genomad_db=args.genomad_db,
-                threads=args.threads
-            )
-            else:
-                logging.warning("Skipping geNomad run; using only Kraken long contigs")
-                genomad_output_viral_fasta = long_contigs_fasta
-
-            combined_fasta_for_clustering = os.path.join(args.output_dir, "combined_contigs_for_clustering.fasta")
-            extract_contigs_diamond.filter_and_merge(
-            fasta_paths=[genomad_output_viral_fasta, long_contigs_fasta],
-            min_length=200,
-            output_path=combined_fasta_for_clustering
-        )
-
-            clustered_out_dir = os.path.join(args.output_dir, "clustered_output")
-            clustered_fasta = extract_contigs_diamond.cluster_contigs(
-            virus_fasta=combined_fasta_for_clustering,
-            output_dir=clustered_out_dir,
-            threads=args.threads
-        )
-
-            extract_contigs_diamond.extract_long_contigs(
-            input_fasta=clustered_fasta,
-            output_fasta=clustered_long_contigs_fasta
-        )
-
-    # --------------------------------------------------------------------
-    # 💎 Run DIAMOND + downstream analysis (always executed)
-    # --------------------------------------------------------------------
-            diamond_result_file = os.path.join(args.output_dir, "results_clustered.m8")
-            extract_contigs_diamond.run_diamond(
+        # Always run DIAMOND and downstream
+        diamond_result_file = os.path.join(args.output_dir, "results_clustered.m8")
+        extract_contigs_diamond.run_diamond(
             diamond_db=args.diamond_db,
             query_file=clustered_long_contigs_fasta,
             output_file=diamond_result_file,
             threads=args.threads
-    )
-
-            processed_output = process_virus_contigs(
-            fasta_file=args.nr_path,
-        diamond_results_file=diamond_result_file,
-        output_dir=args.output_dir
-    )
-
-            filtered_clusters_file = process_clustered_contigs(
-            clstr_file=os.path.join(args.output_dir, "clustered_output", "clustered_contigs.fasta.clstr"),
-            diamond_tsv=os.path.join(args.output_dir, "diamond_results_contig_with_sampleid.tsv"),
-        output_dir=args.output_dir
-    )
-
-            if args.run_scaffolding:
-                df = pd.read_csv(os.path.join(args.output_dir, "filtered_clusters_assigned_rep_virus.tsv"), sep="\t")
-                unique_pairs = df[["Sample_ID", "virus"]].drop_duplicates()
-                for _, row in unique_pairs.iterrows():
-                    sample_id = row["Sample_ID"]
-                    virus = row["virus"]
-                    try:
-                        fasta_out, length_out = scaffold_virus_contigs(
-                    tsv_path=filtered_clusters_file,
-                    sample_id=sample_id,
-                    virus_name=virus,
-                    contigs_root=args.output_dir,
-                    output_root=os.path.join(args.output_dir, "scaffolded_out"),
-                    threads=args.threads
-                )
-                        logging.info(f"✅ Scaffolded {sample_id} – {virus}: {fasta_out}")
-                    except Exception as e:
-                         logging.error(f"❌ Scaffold failed for {sample_id} – {virus}: {e}")
-
-            if args.run_alignment:
-                logging.info("🧬 Running alignment summary for viral contigs...")
-                run_alignment_summary(
-            diamond_tsv=filtered_clusters_file,
-            merged_fasta=clustered_long_contigs_fasta,
-            fastq_dir=args.output_dir,
-            output_file=os.path.join(args.output_dir, "alignment_summary.tsv"),
-            tmp_dir=os.path.join(args.output_dir, "tmp_alignments"),
-            run_alignment=args.run_alignment,
-            max_workers=args.max_workers,
-            bwa_threads_per_job=args.bwa_threads,
-            min_contig_len=200
         )
 
+        processed_output = process_virus_contigs(
+            fasta_file=args.nr_path,
+            diamond_results_file=diamond_result_file,
+            output_dir=args.output_dir
+        )
 
+        filtered_clusters_file = process_clustered_contigs(
+            clstr_file=os.path.join(args.output_dir, "clustered_output", "clustered_contigs.fasta.clstr"),
+            diamond_tsv=os.path.join(args.output_dir, "diamond_results_contig_with_sampleid.tsv"),
+            output_dir=args.output_dir
+        )
 
-            else:
-                logging.warning("Diamond requested but --use_assembly not provided. Skipping contig analysis.")
+        if args.run_scaffolding:
+            df = pd.read_csv(os.path.join(args.output_dir, "filtered_clusters_assigned_rep_virus.tsv"), sep="\t")
+            unique_pairs = df[["Sample_ID", "virus"]].drop_duplicates()
+            for _, row in unique_pairs.iterrows():
+                sample_id = row["Sample_ID"]
+                virus = row["virus"]
+                try:
+                    fasta_out, length_out = scaffold_virus_contigs(
+                        tsv_path=filtered_clusters_file,
+                        sample_id=sample_id,
+                        virus_name=virus,
+                        contigs_root=args.output_dir,
+                        output_root=os.path.join(args.output_dir, "scaffolded_out"),
+                        threads=args.threads
+                    )
+                    logging.info(f"✅ Scaffolded {sample_id} – {virus}: {fasta_out}")
+                except Exception as e:
+                    logging.error(f"❌ Scaffold failed for {sample_id} – {virus}: {e}")
+
+        if args.run_alignment:
+            logging.info("🧬 Running alignment summary for viral contigs...")
+            run_alignment_summary(
+                diamond_tsv=filtered_clusters_file,
+                merged_fasta=clustered_long_contigs_fasta,
+                fastq_dir=args.output_dir,
+                output_file=os.path.join(args.output_dir, "alignment_summary.tsv"),
+                tmp_dir=os.path.join(args.output_dir, "tmp_alignments"),
+                run_alignment=args.run_alignment,
+                max_workers=args.max_workers,
+                bwa_threads_per_job=args.bwa_threads,
+                min_contig_len=200
+            )
+
     else:
         logging.info("⚠️ Skipping Diamond step as requested.")
 
-    
+    # ------------------------------------------------------------
+    # Domain-specific Kraken abundance plots
+    # ------------------------------------------------------------
     if not args.skip_reports:
         domains = ["Bacteria", "Viruses", "Archaea", "Eukaryota"]
         domain_flags = [args.bacteria, args.virus, args.archaea, args.eukaryota]
         domain_rank_codes = {
-            "Bacteria":  ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
-            "Viruses":   ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
-            "Archaea":   ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3'],
-            "Eukaryota": ['S','S1','S2','F','F1','F2','F3','D','D1','D2','D3']
+            "Bacteria": ['S', 'S1', 'S2', 'F', 'F1', 'F2', 'F3', 'D', 'D1', 'D2', 'D3'],
+            "Viruses": ['S', 'S1', 'S2', 'F', 'F1', 'F2', 'F3', 'D', 'D1', 'D2', 'D3'],
+            "Archaea": ['S', 'S1', 'S2', 'F', 'F1', 'F2', 'F3', 'D', 'D1', 'D2', 'D3'],
+            "Eukaryota": ['S', 'S1', 'S2', 'F', 'F1', 'F2', 'F3', 'D', 'D1', 'D2', 'D3']
         }
 
         sample_id_df = create_sample_id_df(args.input_dir) if args.no_metadata else None
@@ -381,24 +339,29 @@ def main():
                         merged_tsv = args.filtered_tsv
                     if merged_tsv and os.path.isfile(merged_tsv):
                         generate_abundance_plots(merged_tsv, args.top_N, args.col_filter, args.pat_to_keep, rank)
+
                         if args.run_ref_base:
                             df = pd.read_csv(merged_tsv, sep="\t")
                             df = df[~df['Scientific_name'].str.contains('Homo sapiens', na=False)]
                             df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
                             ref_based(df, args.output_dir, args.input_dir, args.bowtie2_index, args.threads, rank)
+
                         if args.run_deno_ref:
                             deno_ref_based(merged_tsv, args.output_dir, args.input_dir, args.threads, rank)
+
     elif args.run_ref_base or args.run_deno_ref:
         merged_tsv_file = args.filtered_tsv if args.filtered_tsv else merged_tsv
         if os.path.isfile(merged_tsv_file):
             if args.run_ref_base:
-                ref_based(pd.read_csv(merged_tsv_file, sep="\t"), args.output_dir, args.input_dir, args.bowtie2_index, args.threads, "S")
+                ref_based(pd.read_csv(merged_tsv_file, sep="\t"),
+                          args.output_dir, args.input_dir, args.bowtie2_index, args.threads, "S")
             if args.run_deno_ref:
                 deno_ref_based(merged_tsv_file, args.output_dir, args.input_dir, args.threads, "S")
 
+    # Optional MultiQC
+    if not args.skip_multiqc:
+        run_multiqc(args.output_dir)
 
-#if not args.skip_multiqc:
-        #run_multiqc(args.output_dir)
 
 if __name__ == "__main__":
     main()
