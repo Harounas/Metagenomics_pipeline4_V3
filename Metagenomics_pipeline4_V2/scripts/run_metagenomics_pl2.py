@@ -193,6 +193,11 @@ def main():
 
     # Diamond toggle
     parser.add_argument("--diamond", action="store_true", help="Enable Diamond annotation")
+    parser.add_argument(
+    "--resume_from_diamond",
+    action="store_true",
+    help="Resume pipeline directly from Diamond step if clustered_long_contigs.fasta exists"
+)
 
     args = parser.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
