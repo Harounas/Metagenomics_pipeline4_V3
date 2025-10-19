@@ -234,14 +234,7 @@ def main():
     else:
         logging.info("⏩ Skipping preprocessing, Kraken, and geNomad steps (resume mode enabled)")
 
-    # 🔧 ADD THIS LINE TO GENERATE THE REQUIRED FILE
-    clustered_long_contigs_fasta = extract_and_cluster_viral_contigs(
-            input_dir=args.output_dir,
-            output_dir=args.output_dir,
-            genomad_db=args.genomad_db,
-            threads=args.threads,
-            skip_existing=args.skip_existing
-        )
+
 
     # ------------------------------------------------------------
     # Diamond and downstream
@@ -257,6 +250,14 @@ def main():
                 return
 
             logging.info("🧬 Running contig extraction, geNomad, clustering, and Diamond annotation…")
+                # 🔧 ADD THIS LINE TO GENERATE THE REQUIRED FILE
+            clustered_long_contigs_fasta = extract_and_cluster_viral_contigs(
+            input_dir=args.output_dir,
+            output_dir=args.output_dir,
+            genomad_db=args.genomad_db,
+            threads=args.threads,
+            skip_existing=args.skip_existing
+        )
             # Insert extraction + geNomad + clustering logic here
         else:
             logging.info("⏭️ Skipping contig extraction and geNomad steps (resume mode enabled). Proceeding to DIAMOND…")
