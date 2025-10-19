@@ -473,3 +473,41 @@ def process_diamond_results(results_file: str = "results.m8",
 
     print(f"✅ Annotated Diamond output → {out_csv}")
     print(f"✅ Sorted results → {sorted_csv}")
+
+
+
+
+
+def extract_and_cluster_viral_contigs(input_dir: str,
+                                      output_dir: str,
+                                      genomad_db: str,
+                                      threads: int = 8,
+                                      min_contig_len: int = 500,
+                                      skip_existing: bool = False) -> str:
+    """
+    Full pipeline: extract contigs, run geNomad, cluster viral contigs,
+    and extract long clustered contigs.
+    Returns path to clustered_long_contigs.fasta.
+    """
+    merged_contigs = os.path.join(output_dir, "merged_contigs_genomad.fasta")
+    virus_out_dir = os.path.join(output_dir, "genomad_out")
+    clustered_fasta = os.path.join(output_dir, "clustered_contigs.fasta")
+    final_output = os.path.join(output_dir, "clustered_long_contigs.fasta")
+
+    # Step 1: Merge contigs
+    if not skip_existing or not os.path.exists(merged_contigs):
+        extract_and_merge_contigs_genomad(input_dir, merged_contigs, min_length=200)
+
+    # Step 2: Run geNomad
+    virus_fasta = run_genomad(merged_contigs, virus_out_dir, genomad_db, threads=threads)
+
+    # Step 3: Cluster
+    clustered_path = cluster_contigs(virus_fasta, output_dir, final_output="clustered_contigs.fasta", threads=threads)
+
+    # Step 4: Extract long contigs
+    extract_long_contigs(clustered_path, final_output, min_length=min_contig_len)
+
+    if not os.path.exists(final_output):
+        raise FileNotFoundError(f"clustered_long_contigs.fasta not created at {final_output}")
+
+    return final_output
