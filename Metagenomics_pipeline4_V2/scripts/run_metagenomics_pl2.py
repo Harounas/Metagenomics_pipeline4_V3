@@ -38,6 +38,7 @@ from Metagenomics_pipeline4_V2.alignment_summary import run_alignment_summary
 from Metagenomics_pipeline4_V2.extract_contigs_diamond import process_virus_contigs
 from Metagenomics_pipeline4_V2.process_clustered_contigs import process_clustered_contigs
 from Metagenomics_pipeline4_V2.virus_scaffolding import scaffold_virus_contigs
+from Metagenomics_pipeline4_V2.extract_contigs_diamond import extract_and_cluster_viral_contigs
 
 # ------------------------------------------------------------
 # Logging configuration
@@ -232,6 +233,15 @@ def main():
             process_output_reports(args.output_dir)
     else:
         logging.info("⏩ Skipping preprocessing, Kraken, and geNomad steps (resume mode enabled)")
+
+    # 🔧 ADD THIS LINE TO GENERATE THE REQUIRED FILE
+    clustered_long_contigs_fasta = extract_and_cluster_viral_contigs(
+            input_dir=args.output_dir,
+            output_dir=args.output_dir,
+            genomad_db=args.genomad_db,
+            threads=args.threads,
+            skip_existing=args.skip_existing
+        )
 
     # ------------------------------------------------------------
     # Diamond and downstream
