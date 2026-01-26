@@ -147,4 +147,4 @@ def process_clustered_contigs(clstr_file, diamond_tsv, output_dir):
     
  
  
-process_clustered_contigs("clustered_contigs.fasta.clstr", "diamond_results_contig_with_sampleid.tsv",".")
+#process_clustered_contigs("clustered_contigs.fasta.clstr", "diamond_results_contig_with_sampleid.tsv",".")
