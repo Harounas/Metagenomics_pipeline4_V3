@@ -142,3 +142,9 @@ def process_clustered_contigs(clstr_file, diamond_tsv, output_dir):
     filtered.to_csv(output_file, sep="\t", index=False)
 
     return output_file
+    
+    
+    
+ 
+ 
+process_clustered_contigs("clustered_contigs.fasta.clstr", "diamond_results_contig_with_sampleid.tsv",".")
