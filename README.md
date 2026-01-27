@@ -28,7 +28,7 @@ run_kr_abundance --input_dir /home/harouna/ARSNACAdata/bamfiles/mypipeline --out
   * conda install -c bioconda kraken2
   * conda install conda-forge::biopython
   * curl -fsSL https://pixi.sh/install.sh | bash 
-  *exec $SHELL
+  * exec $SHELL
   * pixi global install -c conda-forge -c bioconda genomad
   * genomad download-database .
 
